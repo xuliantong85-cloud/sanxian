@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>标普·沪深·恒科三线读盘</title>
+<style>
+:root{--paper:#F2F4F6;--sheet:#FFFFFF;--ink:#15202B;--muted:#5D6977;--rule:#D9DFE6;--accent:#23439C;--err:#C2362B}
+@media (prefers-color-scheme:dark){:root{--paper:#0F151C;--sheet:#161E27;--ink:#E4E9EF;--muted:#93A0AF;--rule:#2A3542;--accent:#8FA9F0;--err:#F0776B;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--paper);color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;padding:16px}
+form{width:100%;max-width:340px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:24px;display:flex;flex-direction:column;gap:12px}
+h1{margin:0;font-size:20px;font-family:"Songti SC","STSong",serif}
+p{margin:0;font-size:13px;color:var(--muted)}
+input[type=password]{font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+label{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+button{font:inherit;padding:8px;border:0;border-radius:6px;background:var(--accent);color:var(--sheet);cursor:pointer}
+button[disabled]{opacity:.6;cursor:default}
+#msg{min-height:18px;color:var(--err)}
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>三线读盘</h1>
+  <p>请输入访问密码</p>
+  <input id="pw" type="password" autocomplete="current-password" required autofocus aria-label="访问密码">
+  <label><input id="rem" type="checkbox" checked> 在这台设备上记住密码</label>
+  <button id="go" type="submit">进入</button>
+  <p id="msg" role="alert"></p>
+</form>
+<script>
+// 加密内容由 encrypt.js 生成：PBKDF2-SHA256 派生密钥，AES-GCM 加密
+const P = __PAYLOAD__;
+const KEY = 'sanxian-pw';
+const bytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function decrypt(pw) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: bytes(P.salt), iterations: P.iter, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(P.iv) }, key, bytes(P.ct)));
+}
+function show(html) { document.open(); document.write(html); document.close(); }
+const get = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+const put = v => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) {} };
+
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const pw = document.getElementById('pw').value, go = document.getElementById('go'), msg = document.getElementById('msg');
+  go.disabled = true; go.textContent = '正在解锁…'; msg.textContent = '';
+  try {
+    const html = await decrypt(pw);
+    put(document.getElementById('rem').checked ? pw : null);
+    show(html);
+  } catch (err) {
+    msg.textContent = '密码不对，请再试一次。';
+    go.disabled = false; go.textContent = '进入';
+  }
+});
+// 记住过密码就自动解锁；密码改了就清掉旧的
+(async () => {
+  const saved = get(); if (!saved) return;
+  try { show(await decrypt(saved)); } catch (e) { put(null); }
+})();
+</script>
+</body>
+</html>

@@ -29,7 +29,7 @@ def main():
          + s.replace('</style>\n', '</style>\n' + PUBLIC_CSS + '</head>\n<body>\n', 1)
          + '\n</body>\n</html>\n')
     p = (p.replace("'内置快照（FRED + 补充报价）'", "'每日自动更新（FRED / EODHD）'")
-          .replace("'内置快照（东方财富）'", "'每日自动更新（东方财富）'"))
+          .replace("'内置快照（东方财富）'", "'每日自动更新（腾讯行情 / 东方财富）'"))
     (D / 'public').mkdir(exist_ok=True)
     (D / 'public' / 'index.html').write_text(p, encoding='utf8')
     print('index.html 和 public/index.html 已生成')

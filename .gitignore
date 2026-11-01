@@ -1,2 +1,5 @@
 __pycache__/
 .DS_Store
+# 生成的网页不进仓库：公开版由 GitHub 定时任务生成并加密后发布
+public/
+index.html

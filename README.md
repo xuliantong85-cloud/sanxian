@@ -14,7 +14,9 @@
 | `snap_csi300.txt` | 沪深300 数据快照（2016-02 起） |
 | `snap_hstech.txt` | 恒生科技 数据快照（2016-04 起） |
 | `update.py` | 每日更新：在三份快照后面补上新交易日，然后运行 `build.py` |
-| `build.py` | 由模板、计算逻辑和快照生成两份网页 |
+| `build.py` | 由模板、计算逻辑和快照生成两份网页（生成的网页不提交到仓库） |
+| `encrypt.js` | 用访问密码加密 `public/index.html`，换成 `lock.html` 密码页 |
+| `lock.html` | 密码页模板：输入密码后在浏览器里解密并显示网页 |
 | `.github/workflows/daily.yml` | GitHub 定时任务：每个交易日运行 `update.py` 并发布到 GitHub Pages |
 
 快照格式：`yymmdd:收盘价`，用英文逗号分隔。
@@ -27,7 +29,15 @@ GitHub Actions 在周一至周五 23:00 UTC（北京时间次日 7:00）运行�
    - 沪深300、恒生科技：腾讯行情日 K 线；读不到时改用东方财富。
    - 标普500：EODHD 的 GSPC.INDX（FRED 不允许脚本访问）。需要在仓库的 Settings → Secrets and variables → Actions 里设置 `EODHD_KEY`。
 2. 把更新后的快照提交回仓库。
-3. 把 `public/` 发布到 GitHub Pages。
+3. `encrypt.js` 用访问密码加密公开版网页。密码在 Secrets 里设置为 `PAGE_PASSWORD`；没有设置时这一步失败，不会发布未加密的网页。
+4. 把 `public/` 发布到 GitHub Pages。
+
+### 访问密码
+
+- 打开网址先看到密码页，输对密码后，浏览器在本地解密并显示网页（PBKDF2-SHA256 + AES-256-GCM）。
+- 勾选"记住密码"后，同一台设备下次打开会自动进入。
+- 改密码：在 Secrets 里更新 `PAGE_PASSWORD`，再手动运行一次「每日更新」。之前记住的旧密码会失效，需要重新输入。
+- 限制：仓库是公开的，代码和行情数据快照在仓库里都能看到；密码只保护这个网址。
 
 也可以在仓库的 Actions 页面选「每日更新」→ Run workflow 手动运行。
 
