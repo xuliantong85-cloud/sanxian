@@ -151,6 +151,7 @@ button{font:inherit;cursor:pointer}
 <div class="wrap">
   <nav class="mkt" role="tablist" aria-label="市场">
     <button type="button" role="tab" data-m="spx" aria-selected="true">标普500<small>美股</small></button>
+    <button type="button" role="tab" data-m="ndx" aria-selected="false">纳指100<small>美股</small></button>
     <button type="button" role="tab" data-m="csi300" aria-selected="false">沪深300<small>A股</small></button>
     <button type="button" role="tab" data-m="hstech" aria-selected="false">恒生科技<small>港股</small></button>
   </nav>
@@ -268,7 +269,7 @@ button{font:inherit;cursor:pointer}
 
   <footer class="foot">
     <p><b>计算方法</b>　布林线：20 日简单均线 ± 2 倍总体标准差，%B =（收盘 − 下轨）/（上轨 − 下轨），带宽 =（上轨 − 下轨）/ 中轨。RSI：14 日 Wilder 平滑。偏离度 =（收盘 / N 日均线 − 1）× 100%。分位数都按最近 252 个交易日计算。</p>
-    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
+    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。纳斯达克100（NDX）来自腾讯行情的日 K 线收盘价。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
     <p><b>提示</b>　技术指标基于历史价格，属于滞后指标；"历史相似读数"的样本量小且彼此重叠，只能当参考。本页不是投资建议，也不构成买卖推荐。</p>
   </footer>
 </div>
@@ -282,6 +283,7 @@ const SNAP = "__SNAP__";            // 标普500 FRED 快照
 const SNAP_EXTRA = "261029:7720.39,261030:7580.07"; // FRED 尚未收录的最近收盘（Yahoo Finance 报价）
 const SNAP_CSI = "__SNAP_CSI__";    // 沪深300 东方财富快照
 const SNAP_HST = "__SNAP_HST__";    // 恒生科技 东方财富快照
+const SNAP_NDX = "__SNAP_NDX__";    // 纳斯达克100 腾讯行情快照
 const SNAP_SAVED = "2026-10-31";
 const HOST = "host:claude_browser";
 const { fmt } = Core;
@@ -291,6 +293,10 @@ const MKT = {
   spx: { key: 'spx', name: '标普500', full: '美国标普500指数', eyebrow: 'S&P 500 · 日线', srcName: 'FRED', host: 'fred.stlouisfed.org',
     url: 'https://fred.stlouisfed.org/data/SP500.txt', parse: Core.parseFredText, extra: SNAP_EXTRA,
     rows: Core.merge(Core.parseCompact(SNAP), Core.parseCompact(SNAP_EXTRA)), source: '内置快照（FRED + 补充报价）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  // 腾讯一次最多给约 640 天，所以刷新时只把新交易日接在已有的 10 年历史后面（append）
+  ndx: { key: 'ndx', name: '纳指100', full: '美国纳斯达克100指数（NDX）', eyebrow: 'NASDAQ-100 · NDX · 日线', srcName: '腾讯行情', host: 'web.ifzq.gtimg.cn',
+    url: 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=us.NDX,day,,,640,qfq', parse: Core.parseTencent, extra: '', append: true,
+    rows: Core.parseCompact(SNAP_NDX), source: '内置快照（腾讯行情）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
   csi300: { key: 'csi300', name: '沪深300', full: 'A股沪深300指数（000300）', eyebrow: 'CSI 300 · 000300 · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
     url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
     rows: Core.parseCompact(SNAP_CSI), source: '内置快照（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
@@ -521,7 +527,8 @@ async function refresh(key, auto){
       }
     }
     if (!base && !fresh.length) throw baseErr || { message: eodMsg };
-    const rows = Core.merge(base || mk.rows, fresh.length ? fresh : Core.parseCompact(mk.extra));
+    const hist = base && mk.append ? Core.merge(mk.rows, base) : (base || mk.rows);
+    const rows = Core.merge(hist, fresh.length ? fresh : Core.parseCompact(mk.extra));
     mk.rows = rows;
     mk.source = base && fresh.length ? `${mk.srcName} + EODHD（已刷新）` : base ? `${mk.srcName}（已刷新）` : '已保存数据 + EODHD（已刷新）';
     mk.updatedAt = new Date().toISOString();

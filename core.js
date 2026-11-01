@@ -25,6 +25,14 @@ const Core = (() => {
     while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
     return out;
   }
+  // 腾讯行情 K 线接口：day 里每项是 ["2026-10-30","开","收","高","低","量"]
+  function parseTencent(t) {
+    const out = [];
+    const re = /\["(\d{4}-\d{2}-\d{2})","[\d.]+","(\d+(?:\.\d+)?)"/g;
+    let m;
+    while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
+    return out.filter(r => r.c > 0);
+  }
   // EODHD 日线 JSON：[{"date":"2026-10-30",...,"close":7580.07,...}]
   function parseEodhd(t) {
     const out = [];
@@ -248,6 +256,6 @@ const Core = (() => {
       rsiState, rsiTone, bbState, bbTone, biasState, biasTone, levels, scenarios, analog };
   }
 
-  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
+  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseTencent, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
 })();
 if (typeof module !== 'undefined') module.exports = Core;

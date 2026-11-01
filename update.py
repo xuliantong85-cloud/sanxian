@@ -1,6 +1,7 @@
 # 每日更新三份数据快照，然后重新生成网页（build.py）
 # 快照里已有约 10 年历史，这里只在后面补上新交易日：
 #   沪深300、恒生科技：腾讯行情日 K 线，读不到时改用东方财富
+#   纳指100：腾讯行情日 K 线，读不到时改用 EODHD（需要 EODHD_KEY）
 #   标普500：FRED 不允许脚本访问，改用 EODHD
 #            需要环境变量 EODHD_KEY；没有密钥时跳过标普，只更新另外两个
 import json, os, sys, urllib.request
@@ -46,16 +47,33 @@ def from_eastmoney(secid):
     return {k.split(',')[0]: float(k.split(',')[1]) for k in klines}
 
 
+def from_eodhd(symbol):
+    key = os.environ.get('EODHD_KEY', '').strip()
+    if not key:
+        raise RuntimeError('没有 EODHD_KEY')
+    start = (date.today() - timedelta(days=30)).isoformat()
+    data = json.loads(get(f'https://eodhd.com/api/eod/{symbol}?api_token={key}&fmt=json&from={start}'))
+    if not isinstance(data, list) or not data:
+        raise RuntimeError('EODHD 没有返回数据')
+    return {r['date']: float(r['close']) for r in data if r.get('close')}
+
+
 def update_cn(name, tencent, secid, label):
-    """在已有历史后面补上新交易日：腾讯为主，东方财富备用"""
+    """沪深300、恒生科技：腾讯为主，东方财富备用"""
+    return update_append(name, label, [('腾讯', from_tencent, tencent), ('东方财富', from_eastmoney, secid)])
+
+
+def update_append(name, label, sources):
+    """依次尝试各数据源，在已有历史后面补上新交易日"""
     old = load(name)
     last = max(old)
     errs = []
-    for src, fn, arg in [('腾讯', from_tencent, tencent), ('东方财富', from_eastmoney, secid)]:
+    for src, fn, arg in sources:
         try:
             fresh = fn(arg)
         except Exception as e:
-            errs.append(f'{src} {type(e).__name__}')
+            # 只记录异常类型和自定义说明，不打印原文，避免带密钥的网址进日志
+            errs.append(f'{src} {e}' if isinstance(e, RuntimeError) else f'{src} {type(e).__name__}')
             continue
         # 和已有历史重叠的日期对一下，防止数据源口径不同
         common = [d for d in fresh if d in old][-5:]
@@ -96,6 +114,7 @@ def update_spx():
 
 if __name__ == '__main__':
     msgs = [update_spx(),
+            update_append('snap_ndx.txt', '纳指100', [('腾讯', from_tencent, 'us.NDX'), ('EODHD', from_eodhd, 'NDX.INDX')]),
             update_cn('snap_csi300.txt', 'sh000300', '1.000300', '沪深300'),
             update_cn('snap_hstech.txt', 'hkHSTECH', '124.HSTECH', '恒生科技')]
     print('\n'.join(msgs))
