@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>标普·沪深·恒科三线读盘</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;800&display=swap">
+<style>
+/* 布局：一条读数带（收盘 + 总判断）→ 三张指标卡 → 共用时间轴的三层图 → 分周期解读、价位、情景、历史统计 */
+:root{
+  --paper:#F2F4F6; --sheet:#FFFFFF; --ink:#15202B; --muted:#5D6977; --rule:#D9DFE6; --grid:#E7EBF0;
+  --accent:#23439C; --band:#8EA2C9; --bandfill:rgba(35,67,156,.07); --ma200:#B26B12;
+  --rise:#1D7A4D; --fall:#C2362B; --hot:#C2541A; --cold:#1F6F8B; --flat:#6B7684;
+  --hot-bg:#FBEDE4; --cold-bg:#E3F0F4; --rise-bg:#E2F1E8; --fall-bg:#F8E6E4; --flat-bg:#ECEFF2;
+  --display:"Noto Serif SC","Songti SC","STSong",serif;
+  --body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F151C; --sheet:#161E27; --ink:#E4E9EF; --muted:#93A0AF; --rule:#2A3542; --grid:#202A35;
+  --accent:#8FA9F0; --band:#5F75A6; --bandfill:rgba(143,169,240,.09); --ma200:#E0A04A;
+  --rise:#5CC48E; --fall:#F0776B; --hot:#F09A5E; --cold:#6CC0DA; --flat:#9AA6B4;
+  --hot-bg:#3A2418; --cold-bg:#15303A; --rise-bg:#16301F; --fall-bg:#3A1C1A; --flat-bg:#222C37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0F151C; --sheet:#161E27; --ink:#E4E9EF; --muted:#93A0AF; --rule:#2A3542; --grid:#202A35;
+  --accent:#8FA9F0; --band:#5F75A6; --bandfill:rgba(143,169,240,.09); --ma200:#E0A04A;
+  --rise:#5CC48E; --fall:#F0776B; --hot:#F09A5E; --cold:#6CC0DA; --flat:#9AA6B4;
+  --hot-bg:#3A2418; --cold-bg:#15303A; --rise-bg:#16301F; --fall-bg:#3A1C1A; --flat-bg:#222C37; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:.02em}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:500}
+p{margin:0}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 市场切换 */
+.mkt{display:flex;gap:4px;border-bottom:1px solid var(--rule);overflow-x:auto}
+.mkt button{border:0;background:transparent;color:var(--muted);padding:8px 14px 10px;font-size:15px;font-weight:700;border-bottom:3px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+.mkt button small{font-size:11.5px;font-weight:500;letter-spacing:.04em}
+.mkt button:hover{color:var(--ink)}
+.mkt button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+/* 顶部读数带 */
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 24px;align-items:end;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.title h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,34px);letter-spacing:.02em}
+.title .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.quote{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.quote .px{font-family:var(--mono);font-size:clamp(28px,5vw,40px);font-weight:600;letter-spacing:-.01em}
+.quote .chg{font-family:var(--mono);font-size:16px;font-weight:500}
+.up-t{color:var(--rise)} .down-t{color:var(--fall)}
+.status{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;color:var(--muted)}
+.status .sep{width:1px;height:12px;background:var(--rule)}
+.btn{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:6px;padding:5px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn.primary{background:var(--accent);color:var(--sheet);border-color:var(--accent)}
+.btn.primary:hover{opacity:.9;color:var(--sheet)}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.note{font-size:13px;color:var(--muted)}
+.note.err{color:var(--hot)}
+.eod{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.eod label{font-size:13px;font-weight:700}
+.eod input{flex:1 1 220px;min-width:0;font-family:var(--mono);font-size:13px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+.eod .note{flex-basis:100%}
+
+/* 总判断 */
+.verdict{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 18px;align-items:start}
+.verdict .stamp{grid-row:span 2;width:10px;align-self:stretch;border-radius:3px;background:var(--flat)}
+.verdict[data-tone="up"] .stamp{background:var(--rise)}
+.verdict[data-tone="down"] .stamp{background:var(--fall)}
+.verdict[data-tone="caution"] .stamp{background:var(--hot)}
+.verdict[data-tone="hot"] .stamp{background:var(--hot)}
+.verdict h3{font-family:var(--display);font-size:clamp(20px,3vw,26px);font-weight:800}
+.verdict .tri{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:2px 9px;border-radius:999px;background:var(--flat-bg);color:var(--flat);font-weight:500;white-space:nowrap}
+.chip[data-tone="up"]{background:var(--rise-bg);color:var(--rise)}
+.chip[data-tone="down"]{background:var(--fall-bg);color:var(--fall)}
+.chip[data-tone="hot"]{background:var(--hot-bg);color:var(--hot)}
+.chip[data-tone="cold"]{background:var(--cold-bg);color:var(--cold)}
+.chip b{font-weight:700}
+
+/* 三张指标卡 */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card .name{font-weight:700;font-size:14px}
+.card .big{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1.1}
+.card .big small{font-size:13px;color:var(--muted);font-weight:400;margin-left:4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.meter{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cold-bg) 0 30%,var(--flat-bg) 30% 70%,var(--hot-bg) 70% 100%)}
+.meter i{position:absolute;top:-4px;width:3px;height:14px;border-radius:2px;background:var(--ink);transform:translateX(-50%)}
+.meter-l{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.meter-l.abs{display:block;position:relative;height:16px}
+.meter-l.abs span{position:absolute;transform:translateX(-50%)}
+.meter-l.abs span:first-child{transform:none}
+.meter-l.abs span:last-child{transform:translateX(-100%)}
+
+/* 图表 */
+.panel{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);padding:4px 12px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--sheet)}
+.readout{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted);min-height:20px}
+.readout b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px;background:var(--c)}
+.legend span.area::before{height:8px;background:var(--bandfill);border:1px solid var(--band)}
+#chart{width:100%;touch-action:pan-y}
+#chart svg{display:block;width:100%;height:auto}
+
+/* 解读 */
+.grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+.reads{display:flex;flex-direction:column;gap:14px}
+.read{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 14px}
+.read .lab{font-family:var(--display);font-weight:800;font-size:16px;padding-top:1px}
+.read p{max-width:62ch}
+.levels{width:100%;border-collapse:collapse;font-size:13.5px}
+.levels th{font-weight:500;color:var(--muted);text-align:left;font-size:12px;padding:4px 0;border-bottom:1px solid var(--rule)}
+.levels td{padding:6px 0;border-bottom:1px solid var(--grid)}
+.levels td.num{text-align:right}
+.levels tr.now td{font-weight:700;color:var(--accent);border-bottom-color:var(--accent)}
+.scen{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.scen .s{border-top:3px solid var(--flat);padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.scen .s[data-tone="up"]{border-top-color:var(--rise)}
+.scen .s[data-tone="down"]{border-top-color:var(--fall)}
+.scen .s h3{font-size:15px;font-weight:700}
+.scen .s p{font-size:14px}
+.analog{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat .v{font-family:var(--mono);font-size:22px;font-weight:600}
+.stat .k{font-size:12.5px;color:var(--muted)}
+.ai-out{white-space:pre-wrap;font-size:14.5px;max-width:70ch}
+.foot{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--rule);padding-top:14px}
+.foot p{max-width:90ch}
+
+@media (max-width:820px){
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .top{grid-template-columns:minmax(0,1fr)}
+  .quote{justify-content:flex-start}
+}
+</style>
+<style>#refresh,#eod-toggle,#eod-form,#src+.sep,section.panel:has(#ai-btn){display:none!important}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="mkt" role="tablist" aria-label="市场">
+    <button type="button" role="tab" data-m="spx" aria-selected="true">标普500<small>美股</small></button>
+    <button type="button" role="tab" data-m="csi300" aria-selected="false">沪深300<small>A股</small></button>
+    <button type="button" role="tab" data-m="hstech" aria-selected="false">恒生科技<small>港股</small></button>
+  </nav>
+  <header class="top">
+    <div class="title">
+      <div class="eyebrow" id="eyebrow">S&amp;P 500 · 日线</div>
+      <h1 id="h1">标普500 三线读盘</h1>
+      <p class="sub">布林线 · RSI · 偏离度，最近一年</p>
+    </div>
+    <div class="quote">
+      <span class="px" id="px">—</span>
+      <span class="chg" id="chg"></span>
+    </div>
+    <div class="status">
+      <span id="asof">—</span><span class="sep"></span>
+      <span id="src">—</span><span class="sep"></span>
+      <button class="btn" id="refresh" type="button"><span id="refresh-ico" hidden class="spin"></span><span id="refresh-lbl">刷新数据</span></button>
+      <button class="btn" id="eod-toggle" type="button" aria-expanded="false" aria-controls="eod-form">EODHD 密钥：<span id="eod-state">未设置</span></button>
+      <span class="note" id="rnote"></span>
+    </div>
+    <form class="eod" id="eod-form" hidden>
+      <label for="eod-key">EODHD API 密钥</label>
+      <input id="eod-key" name="eod-key" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴你的 API 密钥">
+      <button class="btn primary" type="submit">保存</button>
+      <button class="btn" type="button" id="eod-clear" hidden>清除已保存的密钥</button>
+      <p class="note">密钥只保存在你本人可读的私有存储里，分享页面后别人看不到。刷新标普500时，先从 FRED 读取 10 年历史，再用 EODHD 补上 FRED 还没收录的最近几天，每次刷新只调用 1 次。</p>
+    </form>
+  </header>
+
+  <section class="verdict" id="verdict" data-tone="flat" aria-live="polite">
+    <div class="stamp"></div>
+    <div class="eyebrow">当前判断</div>
+    <div style="grid-column:2;display:flex;flex-direction:column;gap:10px">
+      <h3 id="v-title">—</h3>
+      <div class="tri" id="v-chips"></div>
+    </div>
+  </section>
+
+  <section class="cards" aria-label="三项指标">
+    <article class="card">
+      <div class="head"><span class="name">布林线（20, 2）</span><span class="chip" id="bb-chip">—</span></div>
+      <div class="big num" id="bb-big">—<small>%B</small></div>
+      <div class="meter" aria-hidden="true"><i id="bb-m"></i></div>
+      <div class="meter-l"><span>下轨 0</span><span>中轨 0.5</span><span>上轨 1</span></div>
+      <dl class="kv" id="bb-kv"></dl>
+    </article>
+    <article class="card">
+      <div class="head"><span class="name">RSI（14）</span><span class="chip" id="rsi-chip">—</span></div>
+      <div class="big num" id="rsi-big">—</div>
+      <div class="meter" aria-hidden="true"><i id="rsi-m"></i></div>
+      <div class="meter-l abs"><span style="left:0">0</span><span style="left:30%">30</span><span style="left:50%">50</span><span style="left:70%">70</span><span style="left:100%">100</span></div>
+      <dl class="kv" id="rsi-kv"></dl>
+    </article>
+    <article class="card">
+      <div class="head"><span class="name">偏离度（乖离率）</span><span class="chip" id="bias-chip">—</span></div>
+      <div class="big num" id="bias-big">—<small>对 20 日均线</small></div>
+      <div class="meter" aria-hidden="true"><i id="bias-m"></i></div>
+      <div class="meter-l"><span>近一年最低</span><span>中位</span><span>最高</span></div>
+      <dl class="kv" id="bias-kv"></dl>
+    </article>
+  </section>
+
+  <section class="panel" aria-label="走势图">
+    <div class="panel-head">
+      <h2>走势与指标</h2>
+      <div class="seg" role="group" aria-label="时间范围">
+        <button type="button" data-r="63" aria-pressed="false">3 个月</button>
+        <button type="button" data-r="126" aria-pressed="false">6 个月</button>
+        <button type="button" data-r="252" aria-pressed="true">1 年</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span style="--c:var(--accent)">收盘价</span>
+      <span class="area">布林带</span>
+      <span style="--c:var(--band)">20 日均线</span>
+      <span style="--c:var(--ma200)">200 日均线</span>
+    </div>
+    <div class="readout" id="readout"></div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>后市分析</h2>
+      <div class="reads">
+        <div class="read"><span class="lab">长期</span><p id="t-long">—</p></div>
+        <div class="read"><span class="lab">中期</span><p id="t-mid">—</p></div>
+        <div class="read"><span class="lab">短期</span><p id="t-short">—</p></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>关键价位</h2>
+      <div style="overflow-x:auto"><table class="levels"><thead><tr><th>价位</th><th style="text-align:right">点位</th><th style="text-align:right">距收盘</th></tr></thead><tbody id="levels"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>接下来看什么</h2>
+    <div class="scen" id="scen"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>历史上相似的读数之后</h2><span class="note" id="an-span"></span></div>
+    <p class="note" id="an-def"></p>
+    <div class="analog" id="analog"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Claude 解读</h2>
+      <button class="btn primary" id="ai-btn" type="button">根据当前读数写一段解读</button>
+    </div>
+    <p class="ai-out" id="ai-out">点按钮后，Claude 会根据上面的全部读数写一段 300 字左右的综合解读。</p>
+  </section>
+
+  <footer class="foot">
+    <p><b>计算方法</b>　布林线：20 日简单均线 ± 2 倍总体标准差，%B =（收盘 − 下轨）/（上轨 − 下轨），带宽 =（上轨 − 下轨）/ 中轨。RSI：14 日 Wilder 平滑。偏离度 =（收盘 / N 日均线 − 1）× 100%。分位数都按最近 252 个交易日计算。</p>
+    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
+    <p><b>提示</b>　技术指标基于历史价格，属于滞后指标；"历史相似读数"的样本量小且彼此重叠，只能当参考。本页不是投资建议，也不构成买卖推荐。</p>
+  </footer>
+</div>
+
+<script>
+/* ===== 指标计算与分析（纯函数，不碰 DOM） ===== */
+const Core = (() => {
+  function parseCompact(s) {
+    return s.split(',').filter(Boolean).map(p => {
+      const [d, c] = p.split(':');
+      return { d: '20' + d.slice(0, 2) + '-' + d.slice(2, 4) + '-' + d.slice(4, 6), c: +c };
+    }).filter(r => isFinite(r.c) && r.c > 0);
+  }
+  function toCompact(rows) {
+    return rows.map(r => r.d.slice(2).replace(/-/g, '') + ':' + r.c).join(',');
+  }
+  // FRED 纯文本数据页：行格式 "2026-10-28\t7743.98"
+  function parseFredText(t) {
+    const out = [];
+    const re = /(\d{4}-\d{2}-\d{2})\s+(\d{3,}\.\d+)/g;
+    let m;
+    while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
+    return out;
+  }
+  // 东方财富 K 线接口：klines 里每项是 "2026-10-30,3599.02"
+  function parseEastmoney(t) {
+    const out = [];
+    const re = /"(\d{4}-\d{2}-\d{2}),(\d+\.\d+)/g;
+    let m;
+    while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
+    return out;
+  }
+  // EODHD 日线 JSON：[{"date":"2026-10-30",...,"close":7580.07,...}]
+  function parseEodhd(t) {
+    const out = [];
+    const re = /"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"[^}]*?"close"\s*:\s*(\d+(?:\.\d+)?)/g;
+    let m;
+    while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
+    return out.filter(r => r.c > 0);
+  }
+  // 以 primary 为准合并，secondary 只补 primary 最后日期之后的行
+  function merge(primary, secondary) {
+    if (!primary.length) return secondary.slice();
+    const map = new Map();
+    primary.forEach(r => map.set(r.d, r.c));
+    const last = primary[primary.length - 1].d;
+    secondary.forEach(r => { if (r.d > last && !map.has(r.d)) map.set(r.d, r.c); });
+    return [...map.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([d, c]) => ({ d, c }));
+  }
+
+  function sma(c, n) {
+    const out = new Array(c.length).fill(null); let s = 0;
+    for (let i = 0; i < c.length; i++) {
+      s += c[i]; if (i >= n) s -= c[i - n];
+      if (i >= n - 1) out[i] = s / n;
+    }
+    return out;
+  }
+  function stdev(c, mean, n) {
+    const out = new Array(c.length).fill(null);
+    for (let i = n - 1; i < c.length; i++) {
+      let v = 0; for (let k = i - n + 1; k <= i; k++) v += (c[k] - mean[i]) ** 2;
+      out[i] = Math.sqrt(v / n);
+    }
+    return out;
+  }
+  function rsi(c, n = 14) {
+    const out = new Array(c.length).fill(null);
+    let g = 0, l = 0;
+    for (let i = 1; i < c.length; i++) {
+      const ch = c[i] - c[i - 1], up = Math.max(ch, 0), dn = Math.max(-ch, 0);
+      if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; out[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); } }
+      else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; out[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); }
+    }
+    return out;
+  }
+  // v 在 arr（非空值）中的百分位
+  function pctRank(arr, v) {
+    const a = arr.filter(x => x != null); if (!a.length) return null;
+    return a.filter(x => x <= v).length / a.length;
+  }
+
+  function compute(rows) {
+    const c = rows.map(r => r.c);
+    const ma20 = sma(c, 20), sd20 = stdev(c, ma20, 20);
+    const ma50 = sma(c, 50), ma100 = sma(c, 100), ma200 = sma(c, 200);
+    const up = ma20.map((m, i) => m == null ? null : m + 2 * sd20[i]);
+    const lo = ma20.map((m, i) => m == null ? null : m - 2 * sd20[i]);
+    const pb = c.map((x, i) => up[i] == null || up[i] === lo[i] ? null : (x - lo[i]) / (up[i] - lo[i]));
+    const bw = ma20.map((m, i) => m == null ? null : (up[i] - lo[i]) / m * 100);
+    const r14 = rsi(c, 14);
+    const bias = (ma) => c.map((x, i) => ma[i] == null ? null : (x / ma[i] - 1) * 100);
+    return { rows, c, ma20, ma50, ma100, ma200, up, lo, pb, bw, rsi: r14,
+      b20: bias(ma20), b50: bias(ma50), b200: bias(ma200) };
+  }
+
+  const f1 = x => x == null ? '—' : x.toFixed(1);
+  const f2 = x => x == null ? '—' : x.toFixed(2);
+  const fp = (x, d = 1) => x == null ? '—' : (x > 0 ? '+' : '') + x.toFixed(d) + '%';
+  const fi = x => x == null ? '—' : Math.round(x).toLocaleString('en-US');
+
+  function analyze(ind) {
+    const n = ind.c.length, i = n - 1, c = ind.c[i];
+    const yr = Math.max(0, n - 252);
+    const last = k => ind[k][i];
+    const win = (k) => ind[k].slice(yr, n);
+    const m = {
+      date: ind.rows[i].d, close: c, prev: ind.c[i - 1],
+      chg: (c / ind.c[i - 1] - 1) * 100,
+      ma20: last('ma20'), ma50: last('ma50'), ma100: last('ma100'), ma200: last('ma200'),
+      up: last('up'), lo: last('lo'), pb: last('pb'), bw: last('bw'), rsi: last('rsi'),
+      b20: last('b20'), b50: last('b50'), b200: last('b200'),
+      bwPct: pctRank(win('bw'), last('bw')),
+      b20Pct: pctRank(win('b20'), last('b20')),
+      b200Pct: pctRank(win('b200'), last('b200')),
+      hi52: Math.max(...ind.c.slice(yr)), lo52: Math.min(...ind.c.slice(yr)),
+      ma200Slope: ind.ma200[i - 20] ? (ind.ma200[i] / ind.ma200[i - 20] - 1) * 100 : null,
+      rsiPrev5: ind.rsi[i - 5],
+    };
+    m.offHigh = (c / m.hi52 - 1) * 100;
+
+    // 最近 15 天内是否有收口（带宽处于一年最低 15%）
+    let recentSqueeze = false;
+    for (let k = Math.max(yr, n - 15); k < n - 1; k++) if (pctRank(win('bw'), ind.bw[k]) <= 0.15) recentSqueeze = true;
+    m.recentSqueeze = recentSqueeze;
+
+    // 背离：近 10 日创 60 日新高/新低，但 RSI 没有同步
+    const look = 60, recent = 10;
+    const seg = ind.c.slice(n - look), rseg = ind.rsi.slice(n - look);
+    const hiIdx = seg.indexOf(Math.max(...seg)), loIdx = seg.indexOf(Math.min(...seg));
+    m.divergence = null;
+    if (hiIdx >= look - recent) {
+      const prevMax = Math.max(...rseg.slice(0, look - recent).filter(x => x != null));
+      if (rseg[hiIdx] < prevMax - 5) m.divergence = 'bear';
+    }
+    if (loIdx >= look - recent) {
+      const prevMin = Math.min(...rseg.slice(0, look - recent).filter(x => x != null));
+      if (rseg[loIdx] > prevMin + 5) m.divergence = 'bull';
+    }
+
+    // 均线穿越：最近一次收盘跌破/站上 100 日、200 日均线
+    function lastCross(k) {
+      const above = c > ind[k][i];
+      let j = i; while (j > 0 && ind[k][j] != null && (ind.c[j] > ind[k][j]) === above) j--;
+      return { above, days: i - j };
+    }
+    m.x100 = lastCross('ma100'); m.x200 = lastCross('ma200');
+
+    // ---- 三个周期的判断 ----
+    const longUp = c > m.ma200, slopeUp = m.ma200Slope > 0;
+    let longTerm, longScore;
+    if (longUp && slopeUp) { longScore = 2; longTerm = `收盘高于 200 日均线 ${fp(m.b200)}，且 200 日均线仍在上行（近 20 日 ${fp(m.ma200Slope, 2)}），长期上升趋势完好。`; }
+    else if (longUp) { longScore = 1; longTerm = `收盘仍在 200 日均线上方 ${fp(m.b200)}，但 200 日均线已经走平或下拐，长期趋势动能在减弱。`; }
+    else if (!slopeUp) { longScore = -2; longTerm = `收盘低于 200 日均线 ${fp(m.b200)}，且 200 日均线向下，长期趋势转空。`; }
+    else { longScore = -1; longTerm = `收盘跌到 200 日均线下方 ${fp(m.b200)}，但 200 日均线还在上行，这是长期趋势受到考验的位置，需要看能否在几天内收回。`; }
+
+    let midScore = c > m.ma50 ? 1 : -1;
+    let midTerm = c > m.ma50
+      ? `价格在 50 日均线上方（偏离 ${fp(m.b50)}），中期节奏偏多。`
+      : `价格在 50 日均线下方（偏离 ${fp(m.b50)}），中期节奏转弱。`;
+    if (!m.x100.above && m.x100.days <= 5) midTerm += `这是 ${m.x100.days} 个交易日前才跌破的 100 日均线（${fi(m.ma100)}），属于新出现的走弱信号。`;
+    else if (m.x100.above && m.x100.days <= 5) midTerm += `${m.x100.days} 个交易日前重新站上 100 日均线（${fi(m.ma100)}）。`;
+    else midTerm += c > m.ma100 ? `100 日均线（${fi(m.ma100)}）在下方提供支撑。` : `100 日均线（${fi(m.ma100)}）已变成上方压力。`;
+
+    let shortScore = 0, rsiState, rsiTone;
+    if (m.rsi >= 70) { rsiState = '超买'; rsiTone = 'hot'; shortScore = 1; }
+    else if (m.rsi >= 55) { rsiState = '偏强'; rsiTone = 'up'; shortScore = 1; }
+    else if (m.rsi > 45) { rsiState = '中性'; rsiTone = 'flat'; shortScore = 0; }
+    else if (m.rsi > 30) { rsiState = '偏弱'; rsiTone = 'down'; shortScore = -1; }
+    else { rsiState = '超卖'; rsiTone = 'cold'; shortScore = -1; }
+
+    let bbState, bbTone;
+    if (m.pb > 1) { bbState = '突破上轨'; bbTone = 'hot'; }
+    else if (m.pb >= 0.8) { bbState = '贴近上轨'; bbTone = 'up'; }
+    else if (m.pb > 0.2) { bbState = '轨道中部'; bbTone = 'flat'; }
+    else if (m.pb >= 0) { bbState = '贴近下轨'; bbTone = 'down'; }
+    else { bbState = '跌破下轨'; bbTone = 'cold'; }
+    if (m.pb < 0.5) shortScore -= 1; else shortScore += 1;
+
+    let biasState, biasTone;
+    if (m.b20Pct >= 0.9) { biasState = '正偏离偏大'; biasTone = 'hot'; }
+    else if (m.b20Pct <= 0.1) { biasState = '负偏离偏大'; biasTone = 'cold'; }
+    else if (m.b20 >= 0) { biasState = '均线上方'; biasTone = 'up'; }
+    else { biasState = '均线下方'; biasTone = 'down'; }
+
+    let shortTerm = `RSI(14) 为 ${f1(m.rsi)}（${rsiState}），5 个交易日前是 ${f1(m.rsiPrev5)}；`
+      + `布林线 %B 为 ${f2(m.pb)}（${bbState}），带宽 ${f2(m.bw)}%，处在近一年 ${Math.round(m.bwPct * 100)}% 分位；`
+      + `相对 20 日均线偏离 ${fp(m.b20, 2)}，处在近一年 ${Math.round(m.b20Pct * 100)}% 分位。`;
+    if (m.recentSqueeze && (m.pb > 1 || m.pb < 0)) shortTerm += `近期布林带刚经历收口，随后价格${m.pb > 1 ? '向上' : '向下'}突破轨道，通常意味着一段方向性波动刚开始，而不是马上反转。`;
+    else if (m.bwPct <= 0.15) shortTerm += '布林带正处于收口状态，大波动可能临近，但方向未定。';
+    if (c <= m.lo52 * 1.001) shortTerm += '收盘创近一年新低。';
+    else if (c >= m.hi52 * 0.999) shortTerm += '收盘创近一年新高。';
+    if (m.divergence === 'bear') shortTerm += '近期价格创 60 日新高，RSI 却没有跟上，出现顶背离。';
+    if (m.divergence === 'bull') shortTerm += '近期价格创 60 日新低，RSI 却没有创新低，出现底背离。';
+
+    // ---- 总判断 ----
+    let verdict, tone;
+    if (longScore > 0) {
+      if (shortScore <= -1) { verdict = '长期上升趋势中的短期回调'; tone = 'caution'; }
+      else if (m.rsi >= 70 || m.pb > 1) { verdict = '趋势向上，短线过热'; tone = 'hot'; }
+      else { verdict = '多头趋势延续'; tone = 'up'; }
+    } else {
+      if (shortScore >= 1) { verdict = '弱势中的反弹'; tone = 'caution'; }
+      else { verdict = '空头占优'; tone = 'down'; }
+    }
+    if (m.rsi <= 30) verdict += '，RSI 进入超卖区';
+    else if (m.pb < 0) verdict += '，价格跌破布林下轨';
+    else if (m.rsi >= 70) verdict += '，RSI 进入超买区';
+    else if (m.pb > 1) verdict += '，价格突破布林上轨';
+
+    // ---- 关键价位 ----
+    const levels = [
+      { k: '布林上轨', v: m.up }, { k: '20 日均线（中轨）', v: m.ma20 }, { k: '布林下轨', v: m.lo },
+      { k: '50 日均线', v: m.ma50 }, { k: '100 日均线', v: m.ma100 }, { k: '200 日均线', v: m.ma200 },
+      { k: '52 周最高', v: m.hi52 }, { k: '52 周最低', v: m.lo52 },
+    ].filter(x => x.v != null).map(x => ({ ...x, dist: (x.v / c - 1) * 100 })).sort((a, b) => b.v - a.v);
+    const above = levels.filter(x => x.v > c * 1.0005 && x.k !== '布林下轨' && x.k !== '52 周最低').sort((a, b) => a.v - b.v);
+    const below = levels.filter(x => x.v < c * 0.9995 && x.k !== '布林上轨' && x.k !== '52 周最高').sort((a, b) => b.v - a.v);
+
+    // ---- 情景 ----
+    const r1 = above[0], r2 = above[1], s1 = below[0], s2 = below[1];
+    const scenarios = [];
+    if (r1) scenarios.push({ tone: 'up', title: '转强条件',
+      text: `${m.pb < 0 ? `先收回布林下轨（${fi(m.lo)}）之内，再` : ''}收盘重新站上${r1.k}（${fi(r1.v)}，距今 ${fp(r1.dist)}），同时 RSI 回到 50 以上，说明这轮${shortScore < 0 ? (longScore < 0 ? '下跌' : '回调') : '整理'}大概率告一段落${r2 ? `，再上方看${r2.k}（${fi(r2.v)}）` : ''}。` });
+    if (s1) scenarios.push({ tone: 'down', title: '转弱条件',
+      text: `收盘跌破${s1.k}（${fi(s1.v)}，距今 ${fp(s1.dist)}）且几天内收不回来${s2 ? `，下一个参考位是${s2.k}（${fi(s2.v)}，${fp(s2.dist)}）` : ''}。${m.ma200 < c ? '跌破 200 日均线会把短期回调升级为趋势问题。' : ''}` });
+    if (m.rsi <= 35 || m.pb < 0.05) scenarios.push({ tone: 'flat', title: m.rsi <= 35 ? '超卖反弹' : '下轨附近的反弹',
+      text: `${m.rsi <= 35 ? 'RSI 已接近超卖区' : `价格已在布林下轨附近（%B ${f2(m.pb)}），但 RSI ${f1(m.rsi)} 还没到超卖`}。${longScore > 0 ? '长期趋势向上时，这类位置常出现技术性反弹' : '长期趋势向下时，超卖后的反弹往往只是反抽，力度和持续性都偏弱'}；超卖也可以持续，最好等 RSI 拐头向上、价格回到下轨之内再确认。` });
+    if (m.rsi >= 68 || m.pb > 0.95) scenarios.push({ tone: 'flat', title: m.rsi >= 68 ? '过热回落' : '上轨附近的回落',
+      text: `${m.rsi >= 68 ? 'RSI 已接近超买区' : `价格已在布林上轨附近（%B ${f2(m.pb)}），但 RSI ${f1(m.rsi)} 还没到超买`}。${longScore > 0 ? '上升趋势中超买可以维持一段时间，' : '下跌趋势里的超买往往是反弹接近尾声的信号，'}但追高的风险收益比变差，留意 RSI 跌回 70 以下或出现顶背离。` });
+
+    // ---- 历史相似情形 ----
+    const fw = [5, 20], hits = [];
+    for (let k = 200; k < n - 20; k++) {
+      if (ind.rsi[k] == null || ind.pb[k] == null || ind.ma200[k] == null) continue;
+      if ((ind.c[k] > ind.ma200[k]) !== (c > m.ma200)) continue;
+      if (Math.abs(ind.rsi[k] - m.rsi) > 5) continue;
+      if (Math.abs(ind.pb[k] - m.pb) > 0.2) continue;
+      hits.push(k);
+    }
+    const stat = h => {
+      if (!hits.length) return null;
+      const rs = hits.map(k => (ind.c[k + h] / ind.c[k] - 1) * 100).sort((a, b) => a - b);
+      return { median: rs[Math.floor(rs.length / 2)], win: rs.filter(x => x > 0).length / rs.length,
+        p10: rs[Math.floor(rs.length * 0.1)], p90: rs[Math.floor(rs.length * 0.9)] };
+    };
+    // 把相邻命中日合并成"事件"，避免同一段行情重复计数
+    let episodes = 0; hits.forEach((k, j) => { if (j === 0 || k - hits[j - 1] > 5) episodes++; });
+    const analog = { n: hits.length, episodes, span: [ind.rows[Math.min(200, n - 1)].d, ind.rows[Math.max(0, n - 21)].d],
+      f5: stat(5), f20: stat(20) };
+
+    return { m, verdict, tone, longTerm, midTerm, shortTerm, longScore, midScore, shortScore,
+      rsiState, rsiTone, bbState, bbTone, biasState, biasTone, levels, scenarios, analog };
+  }
+
+  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+
+</script>
+<script>
+(() => {
+const SNAP = "161031:2126.15,161101:2111.72,161102:2097.94,161103:2088.66,161104:2085.18,161107:2131.52,161108:2139.56,161109:2163.26,161110:2167.48,161111:2164.45,161114:2164.2,161115:2180.39,161116:2176.94,161117:2187.12,161118:2181.9,161121:2198.18,161122:2202.94,161123:2204.72,161125:2213.35,161128:2201.72,161129:2204.66,161130:2198.81,161201:2191.08,161202:2191.95,161205:2204.71,161206:2212.23,161207:2241.35,161208:2246.19,161209:2259.53,161212:2256.96,161213:2271.72,161214:2253.28,161215:2262.03,161216:2258.07,161219:2262.53,161220:2270.76,161221:2265.18,161222:2260.96,161223:2263.79,161227:2268.88,161228:2249.92,161229:2249.26,161230:2238.83,170103:2257.83,170104:2270.75,170105:2269,170106:2276.98,170109:2268.9,170110:2268.9,170111:2275.32,170112:2270.44,170113:2274.64,170117:2267.89,170118:2271.89,170119:2263.69,170120:2271.31,170123:2265.2,170124:2280.07,170125:2298.37,170126:2296.68,170127:2294.69,170130:2280.9,170131:2278.87,170201:2279.55,170202:2280.85,170203:2297.42,170206:2292.56,170207:2293.08,170208:2294.67,170209:2307.87,170210:2316.1,170213:2328.25,170214:2337.58,170215:2349.25,170216:2347.22,170217:2351.16,170221:2365.38,170222:2362.82,170223:2363.81,170224:2367.34,170227:2369.75,170228:2363.64,170301:2395.96,170302:2381.92,170303:2383.12,170306:2375.31,170307:2368.39,170308:2362.98,170309:2364.87,170310:2372.6,170313:2373.47,170314:2365.45,170315:2385.26,170316:2381.38,170317:2378.25,170320:2373.47,170321:2344.02,170322:2348.45,170323:2345.96,170324:2343.98,170327:2341.59,170328:2358.57,170329:2361.13,170330:2368.06,170331:2362.72,170403:2358.84,170404:2360.16,170405:2352.95,170406:2357.49,170407:2355.54,170410:2357.16,170411:2353.78,170412:2344.93,170413:2328.95,170417:2349.01,170418:2342.19,170419:2338.17,170420:2355.84,170421:2348.69,170424:2374.15,170425:2388.61,170426:2387.45,170427:2388.77,170428:2384.2,170501:2388.33,170502:2391.17,170503:2388.13,170504:2389.52,170505:2399.29,170508:2399.38,170509:2396.92,170510:2399.63,170511:2394.44,170512:2390.9,170515:2402.32,170516:2400.67,170517:2357.03,170518:2365.72,170519:2381.73,170522:2394.02,170523:2398.42,170524:2404.39,170525:2415.07,170526:2415.82,170530:2412.91,170531:2411.8,170601:2430.06,170602:2439.07,170605:2436.1,170606:2429.33,170607:2433.14,170608:2433.79,170609:2431.77,170612:2429.39,170613:2440.35,170614:2437.92,170615:2432.46,170616:2433.15,170619:2453.46,170620:2437.03,170621:2435.61,170622:2434.5,170623:2438.3,170626:2439.07,170627:2419.38,170628:2440.69,170629:2419.7,170630:2423.41,170703:2429.01,170705:2432.54,170706:2409.75,170707:2425.18,170710:2427.43,170711:2425.53,170712:2443.25,170713:2447.83,170714:2459.27,170717:2459.14,170718:2460.61,170719:2473.83,170720:2473.45,170721:2472.54,170724:2469.91,170725:2477.13,170726:2477.83,170727:2475.42,170728:2472.1,170731:2470.3,170801:2476.35,170802:2477.57,170803:2472.16,170804:2476.83,170807:2480.91,170808:2474.92,170809:2474.02,170810:2438.21,170811:2441.32,170814:2465.84,170815:2464.61,170816:2468.11,170817:2430.01,170818:2425.55,170821:2428.37,170822:2452.51,170823:2444.04,170824:2438.97,170825:2443.05,170828:2444.24,170829:2446.3,170830:2457.59,170831:2471.65,170901:2476.55,170905:2457.85,170906:2465.54,170907:2465.1,170908:2461.43,170911:2488.11,170912:2496.48,170913:2498.37,170914:2495.62,170915:2500.23,170918:2503.87,170919:2506.65,170920:2508.24,170921:2500.6,170922:2502.22,170925:2496.66,170926:2496.84,170927:2507.04,170928:2510.06,170929:2519.36,171002:2529.12,171003:2534.58,171004:2537.74,171005:2552.07,171006:2549.33,171009:2544.73,171010:2550.64,171011:2555.24,171012:2550.93,171013:2553.17,171016:2557.64,171017:2559.36,171018:2561.26,171019:2562.1,171020:2575.21,171023:2564.98,171024:2569.13,171025:2557.15,171026:2560.4,171027:2581.07,171030:2572.83,171031:2575.26,171101:2579.36,171102:2579.85,171103:2587.84,171106:2591.13,171107:2590.64,171108:2594.38,171109:2584.62,171110:2582.3,171113:2584.84,171114:2578.87,171115:2564.62,171116:2585.64,171117:2578.85,171120:2582.14,171121:2599.03,171122:2597.08,171124:2602.42,171127:2601.42,171128:2627.04,171129:2626.07,171130:2647.58,171201:2642.22,171204:2639.44,171205:2629.57,171206:2629.27,171207:2636.98,171208:2651.5,171211:2659.99,171212:2664.11,171213:2662.85,171214:2652.01,171215:2675.81,171218:2690.16,171219:2681.47,171220:2679.25,171221:2684.57,171222:2683.34,171226:2680.5,171227:2682.62,171228:2687.54,171229:2673.61,180102:2695.81,180103:2713.06,180104:2723.99,180105:2743.15,180108:2747.71,180109:2751.29,180110:2748.23,180111:2767.56,180112:2786.24,180116:2776.42,180117:2802.56,180118:2798.03,180119:2810.3,180122:2832.97,180123:2839.13,180124:2837.54,180125:2839.25,180126:2872.87,180129:2853.53,180130:2822.43,180131:2823.81,180201:2821.98,180202:2762.13,180205:2648.94,180206:2695.14,180207:2681.66,180208:2581,180209:2619.55,180212:2656,180213:2662.94,180214:2698.63,180215:2731.2,180216:2732.22,180220:2716.26,180221:2701.33,180222:2703.96,180223:2747.3,180226:2779.6,180227:2744.28,180228:2713.83,180301:2677.67,180302:2691.25,180305:2720.94,180306:2728.12,180307:2726.8,180308:2738.97,180309:2786.57,180312:2783.02,180313:2765.31,180314:2749.48,180315:2747.33,180316:2752.01,180319:2712.92,180320:2716.94,180321:2711.93,180322:2643.69,180323:2588.26,180326:2658.55,180327:2612.62,180328:2605,180329:2640.87,180402:2581.88,180403:2614.45,180404:2644.69,180405:2662.84,180406:2604.47,180409:2613.16,180410:2656.87,180411:2642.19,180412:2663.99,180413:2656.3,180416:2677.84,180417:2706.39,180418:2708.64,180419:2693.13,180420:2670.14,180423:2670.29,180424:2634.56,180425:2639.4,180426:2666.94,180427:2669.91,180430:2648.05,180501:2654.8,180502:2635.67,180503:2629.73,180504:2663.42,180507:2672.63,180508:2671.92,180509:2697.79,180510:2723.07,180511:2727.72,180514:2730.13,180515:2711.45,180516:2722.46,180517:2720.13,180518:2712.97,180521:2733.01,180522:2724.44,180523:2733.29,180524:2727.76,180525:2721.33,180529:2689.86,180530:2724.01,180531:2705.27,180601:2734.62,180604:2746.87,180605:2748.8,180606:2772.35,180607:2770.37,180608:2779.03,180611:2782,180612:2786.85,180613:2775.63,180614:2782.49,180615:2779.66,180618:2773.75,180619:2762.59,180620:2767.32,180621:2749.76,180622:2754.88,180625:2717.07,180626:2723.06,180627:2699.63,180628:2716.31,180629:2718.37,180702:2726.71,180703:2713.22,180705:2736.61,180706:2759.82,180709:2784.17,180710:2793.84,180711:2774.02,180712:2798.29,180713:2801.31,180716:2798.43,180717:2809.55,180718:2815.62,180719:2804.49,180720:2801.83,180723:2806.98,180724:2820.4,180725:2846.07,180726:2837.44,180727:2818.82,180730:2802.6,180731:2816.29,180801:2813.36,180802:2827.22,180803:2840.35,180806:2850.4,180807:2858.45,180808:2857.7,180809:2853.58,180810:2833.28,180813:2821.93,180814:2839.96,180815:2818.37,180816:2840.69,180817:2850.13,180820:2857.05,180821:2862.96,180822:2861.82,180823:2856.98,180824:2874.69,180827:2896.74,180828:2897.52,180829:2914.04,180830:2901.13,180831:2901.52,180904:2896.72,180905:2888.6,180906:2878.05,180907:2871.68,180910:2877.13,180911:2887.89,180912:2888.92,180913:2904.18,180914:2904.98,180917:2888.8,180918:2904.31,180919:2907.95,180920:2930.75,180921:2929.67,180924:2919.37,180925:2915.56,180926:2905.97,180927:2914,180928:2913.98,181001:2924.59,181002:2923.43,181003:2925.51,181004:2901.61,181005:2885.57,181008:2884.43,181009:2880.34,181010:2785.68,181011:2728.37,181012:2767.13,181015:2750.79,181016:2809.92,181017:2809.21,181018:2768.78,181019:2767.78,181022:2755.88,181023:2740.69,181024:2656.1,181025:2705.57,181026:2658.69,181029:2641.25,181030:2682.63,181031:2711.74,181101:2740.37,181102:2723.06,181105:2738.31,181106:2755.45,181107:2813.89,181108:2806.83,181109:2781.01,181112:2726.22,181113:2722.18,181114:2701.58,181115:2730.2,181116:2736.27,181119:2690.73,181120:2641.89,181121:2649.93,181123:2632.56,181126:2673.45,181127:2682.17,181128:2743.79,181129:2737.76,181130:2760.17,181203:2790.37,181204:2700.06,181206:2695.95,181207:2633.08,181210:2637.72,181211:2636.78,181212:2651.07,181213:2650.54,181214:2599.95,181217:2545.94,181218:2546.16,181219:2506.96,181220:2467.42,181221:2416.62,181224:2351.1,181226:2467.7,181227:2488.83,181228:2485.74,181231:2506.85,190102:2510.03,190103:2447.89,190104:2531.94,190107:2549.69,190108:2574.41,190109:2584.96,190110:2596.64,190111:2596.26,190114:2582.61,190115:2610.3,190116:2616.1,190117:2635.96,190118:2670.71,190122:2632.9,190123:2638.7,190124:2642.33,190125:2664.76,190128:2643.85,190129:2640,190130:2681.05,190131:2704.1,190201:2706.53,190204:2724.87,190205:2737.7,190206:2731.61,190207:2706.05,190208:2707.88,190211:2709.8,190212:2744.73,190213:2753.03,190214:2745.73,190215:2775.6,190219:2779.76,190220:2784.7,190221:2774.88,190222:2792.67,190225:2796.11,190226:2793.9,190227:2792.38,190228:2784.49,190301:2803.69,190304:2792.81,190305:2789.65,190306:2771.45,190307:2748.93,190308:2743.07,190311:2783.3,190312:2791.52,190313:2810.92,190314:2808.48,190315:2822.48,190318:2832.94,190319:2832.57,190320:2824.23,190321:2854.88,190322:2800.71,190325:2798.36,190326:2818.46,190327:2805.37,190328:2815.44,190329:2834.4,190401:2867.19,190402:2867.24,190403:2873.4,190404:2879.39,190405:2892.74,190408:2895.77,190409:2878.2,190410:2888.21,190411:2888.32,190412:2907.41,190415:2905.58,190416:2907.06,190417:2900.45,190418:2905.03,190422:2907.97,190423:2933.68,190424:2927.25,190425:2926.17,190426:2939.88,190429:2943.03,190430:2945.83,190501:2923.73,190502:2917.52,190503:2945.64,190506:2932.47,190507:2884.05,190508:2879.42,190509:2870.72,190510:2881.4,190513:2811.87,190514:2834.41,190515:2850.96,190516:2876.32,190517:2859.53,190520:2840.23,190521:2864.36,190522:2856.27,190523:2822.24,190524:2826.06,190528:2802.39,190529:2783.02,190530:2788.86,190531:2752.06,190603:2744.45,190604:2803.27,190605:2826.15,190606:2843.49,190607:2873.34,190610:2886.73,190611:2885.72,190612:2879.84,190613:2891.64,190614:2886.98,190617:2889.67,190618:2917.75,190619:2926.46,190620:2954.18,190621:2950.46,190624:2945.35,190625:2917.38,190626:2913.78,190627:2924.92,190628:2941.76,190701:2964.33,190702:2973.01,190703:2995.82,190705:2990.41,190708:2975.95,190709:2979.63,190710:2993.07,190711:2999.91,190712:3013.77,190715:3014.3,190716:3004.04,190717:2984.42,190718:2995.11,190719:2976.61,190722:2985.03,190723:3005.47,190724:3019.56,190725:3003.67,190726:3025.86,190729:3020.97,190730:3013.18,190731:2980.38,190801:2953.56,190802:2932.05,190805:2844.74,190806:2881.77,190807:2883.98,190808:2938.09,190809:2918.65,190812:2883.75,190813:2926.32,190814:2840.6,190815:2847.6,190816:2888.68,190819:2923.65,190820:2900.51,190821:2924.43,190822:2922.95,190823:2847.11,190826:2878.38,190827:2869.16,190828:2887.94,190829:2924.58,190830:2926.46,190903:2906.27,190904:2937.78,190905:2976,190906:2978.71,190909:2978.43,190910:2979.39,190911:3000.93,190912:3009.57,190913:3007.39,190916:2997.96,190917:3005.7,190918:3006.73,190919:3006.79,190920:2992.07,190923:2991.78,190924:2966.6,190925:2984.87,190926:2977.62,190927:2961.79,190930:2976.74,191001:2940.25,191002:2887.61,191003:2910.63,191004:2952.01,191007:2938.79,191008:2893.06,191009:2919.4,191010:2938.13,191011:2970.27,191014:2966.15,191015:2995.68,191016:2989.69,191017:2997.95,191018:2986.2,191021:3006.72,191022:2995.99,191023:3004.52,191024:3010.29,191025:3022.55,191028:3039.42,191029:3036.89,191030:3046.77,191031:3037.56,191101:3066.91,191104:3078.27,191105:3074.62,191106:3076.78,191107:3085.18,191108:3093.08,191111:3087.01,191112:3091.84,191113:3094.04,191114:3096.63,191115:3120.46,191118:3122.03,191119:3120.18,191120:3108.46,191121:3103.54,191122:3110.29,191125:3133.64,191126:3140.52,191127:3153.63,191129:3140.98,191202:3113.87,191203:3093.2,191204:3112.76,191205:3117.43,191206:3145.91,191209:3135.96,191210:3132.52,191211:3141.63,191212:3168.57,191213:3168.8,191216:3191.45,191217:3192.52,191218:3191.14,191219:3205.37,191220:3221.22,191223:3224.01,191224:3223.38,191226:3239.91,191227:3240.02,191230:3221.29,191231:3230.78,200102:3257.85,200103:3234.85,200106:3246.28,200107:3237.18,200108:3253.05,200109:3274.7,200110:3265.35,200113:3288.13,200114:3283.15,200115:3289.29,200116:3316.81,200117:3329.62,200121:3320.79,200122:3321.75,200123:3325.54,200124:3295.47,200127:3243.63,200128:3276.24,200129:3273.4,200130:3283.66,200131:3225.52,200203:3248.92,200204:3297.59,200205:3334.69,200206:3345.78,200207:3327.71,200210:3352.09,200211:3357.75,200212:3379.45,200213:3373.94,200214:3380.16,200218:3370.29,200219:3386.15,200220:3373.23,200221:3337.75,200224:3225.89,200225:3128.21,200226:3116.39,200227:2978.76,200228:2954.22,200302:3090.23,200303:3003.37,200304:3130.12,200305:3023.94,200306:2972.37,200309:2746.56,200310:2882.23,200311:2741.38,200312:2480.64,200313:2711.02,200316:2386.13,200317:2529.19,200318:2398.1,200319:2409.39,200320:2304.92,200323:2237.4,200324:2447.33,200325:2475.56,200326:2630.07,200327:2541.47,200330:2626.65,200331:2584.59,200401:2470.5,200402:2526.9,200403:2488.65,200406:2663.68,200407:2659.41,200408:2749.98,200409:2789.82,200413:2761.63,200414:2846.06,200415:2783.36,200416:2799.55,200417:2874.56,200420:2823.16,200421:2736.56,200422:2799.31,200423:2797.8,200424:2836.74,200427:2878.48,200428:2863.39,200429:2939.51,200430:2912.43,200501:2830.71,200504:2842.74,200505:2868.44,200506:2848.42,200507:2881.19,200508:2929.8,200511:2930.32,200512:2870.12,200513:2820,200514:2852.5,200515:2863.7,200518:2953.91,200519:2922.94,200520:2971.61,200521:2948.51,200522:2955.45,200526:2991.77,200527:3036.13,200528:3029.73,200529:3044.31,200601:3055.73,200602:3080.82,200603:3122.87,200604:3112.35,200605:3193.93,200608:3232.39,200609:3207.18,200610:3190.14,200611:3002.1,200612:3041.31,200615:3066.59,200616:3124.74,200617:3113.49,200618:3115.34,200619:3097.74,200622:3117.86,200623:3131.29,200624:3050.33,200625:3083.76,200626:3009.05,200629:3053.24,200630:3100.29,200701:3115.86,200702:3130.01,200706:3179.72,200707:3145.32,200708:3169.94,200709:3152.05,200710:3185.04,200713:3155.22,200714:3197.52,200715:3226.56,200716:3215.57,200717:3224.73,200720:3251.84,200721:3257.3,200722:3276.02,200723:3235.66,200724:3215.63,200727:3239.41,200728:3218.44,200729:3258.44,200730:3246.22,200731:3271.12,200803:3294.61,200804:3306.51,200805:3327.77,200806:3349.16,200807:3351.28,200810:3360.47,200811:3333.69,200812:3380.35,200813:3373.43,200814:3372.85,200817:3381.99,200818:3389.78,200819:3374.85,200820:3385.51,200821:3397.16,200824:3431.28,200825:3443.62,200826:3478.73,200827:3484.55,200828:3508.01,200831:3500.31,200901:3526.65,200902:3580.84,200903:3455.06,200904:3426.96,200908:3331.84,200909:3398.96,200910:3339.19,200911:3340.97,200914:3383.54,200915:3401.2,200916:3385.49,200917:3357.01,200918:3319.47,200921:3281.06,200922:3315.57,200923:3236.92,200924:3246.59,200925:3298.46,200928:3351.6,200929:3335.47,200930:3363,201001:3380.8,201002:3348.44,201005:3408.63,201006:3360.95,201007:3419.45,201008:3446.83,201009:3477.13,201012:3534.22,201013:3511.93,201014:3488.67,201015:3483.34,201016:3483.81,201019:3426.92,201020:3443.12,201021:3435.56,201022:3453.49,201023:3465.39,201026:3400.97,201027:3390.68,201028:3271.03,201029:3310.11,201030:3269.96,201102:3310.24,201103:3369.16,201104:3443.44,201105:3510.45,201106:3509.44,201109:3550.5,201110:3545.53,201111:3572.66,201112:3537.01,201113:3585.15,201116:3626.91,201117:3609.53,201118:3567.79,201119:3581.87,201120:3557.54,201123:3577.59,201124:3635.41,201125:3629.65,201127:3638.35,201130:3621.63,201201:3662.45,201202:3669.01,201203:3666.72,201204:3699.12,201207:3691.96,201208:3702.25,201209:3672.82,201210:3668.1,201211:3663.46,201214:3647.49,201215:3694.62,201216:3701.17,201217:3722.48,201218:3709.41,201221:3694.92,201222:3687.26,201223:3690.01,201224:3703.06,201228:3735.36,201229:3727.04,201230:3732.04,201231:3756.07,210104:3700.65,210105:3726.86,210106:3748.14,210107:3803.79,210108:3824.68,210111:3799.61,210112:3801.19,210113:3809.84,210114:3795.54,210115:3768.25,210119:3798.91,210120:3851.85,210121:3853.07,210122:3841.47,210125:3855.36,210126:3849.62,210127:3750.77,210128:3787.38,210129:3714.24,210201:3773.86,210202:3826.31,210203:3830.17,210204:3871.74,210205:3886.83,210208:3915.59,210209:3911.23,210210:3909.88,210211:3916.38,210212:3934.83,210216:3932.59,210217:3931.33,210218:3913.97,210219:3906.71,210222:3876.5,210223:3881.37,210224:3925.43,210225:3829.34,210226:3811.15,210301:3901.82,210302:3870.29,210303:3819.72,210304:3768.47,210305:3841.94,210308:3821.35,210309:3875.44,210310:3898.81,210311:3939.34,210312:3943.34,210315:3968.94,210316:3962.71,210317:3974.12,210318:3915.46,210319:3913.1,210322:3940.59,210323:3910.52,210324:3889.14,210325:3909.52,210326:3974.54,210329:3971.09,210330:3958.55,210331:3972.89,210401:4019.87,210405:4077.91,210406:4073.94,210407:4079.95,210408:4097.17,210409:4128.8,210412:4127.99,210413:4141.59,210414:4124.66,210415:4170.42,210416:4185.47,210419:4163.26,210420:4134.94,210421:4173.42,210422:4134.98,210423:4180.17,210426:4187.62,210427:4186.72,210428:4183.18,210429:4211.47,210430:4181.17,210503:4192.66,210504:4164.66,210505:4167.59,210506:4201.62,210507:4232.6,210510:4188.43,210511:4152.1,210512:4063.04,210513:4112.5,210514:4173.85,210517:4163.29,210518:4127.83,210519:4115.68,210520:4159.12,210521:4155.86,210524:4197.05,210525:4188.13,210526:4195.99,210527:4200.88,210528:4204.11,210601:4202.04,210602:4208.12,210603:4192.85,210604:4229.89,210607:4226.52,210608:4227.26,210609:4219.55,210610:4239.18,210611:4247.44,210614:4255.15,210615:4246.59,210616:4223.7,210617:4221.86,210618:4166.45,210621:4224.79,210622:4246.44,210623:4241.84,210624:4266.49,210625:4280.7,210628:4290.61,210629:4291.8,210630:4297.5,210701:4319.94,210702:4352.34,210706:4343.54,210707:4358.13,210708:4320.82,210709:4369.55,210712:4384.63,210713:4369.21,210714:4374.3,210715:4360.03,210716:4327.16,210719:4258.49,210720:4323.06,210721:4358.69,210722:4367.48,210723:4411.79,210726:4422.3,210727:4401.46,210728:4400.64,210729:4419.15,210730:4395.26,210802:4387.16,210803:4423.15,210804:4402.66,210805:4429.1,210806:4436.52,210809:4432.35,210810:4436.75,210811:4447.7,210812:4460.83,210813:4468,210816:4479.71,210817:4448.08,210818:4400.27,210819:4405.8,210820:4441.67,210823:4479.53,210824:4486.23,210825:4496.19,210826:4470,210827:4509.37,210830:4528.79,210831:4522.68,210901:4524.09,210902:4536.95,210903:4535.43,210907:4520.03,210908:4514.07,210909:4493.28,210910:4458.58,210913:4468.73,210914:4443.05,210915:4480.7,210916:4473.75,210917:4432.99,210920:4357.73,210921:4354.19,210922:4395.64,210923:4448.98,210924:4455.48,210927:4443.11,210928:4352.63,210929:4359.46,210930:4307.54,211001:4357.04,211004:4300.46,211005:4345.72,211006:4363.55,211007:4399.76,211008:4391.34,211011:4361.19,211012:4350.65,211013:4363.8,211014:4438.26,211015:4471.37,211018:4486.46,211019:4519.63,211020:4536.19,211021:4549.78,211022:4544.9,211025:4566.48,211026:4574.79,211027:4551.68,211028:4596.42,211029:4605.38,211101:4613.67,211102:4630.65,211103:4660.57,211104:4680.06,211105:4697.53,211108:4701.7,211109:4685.25,211110:4646.71,211111:4649.27,211112:4682.85,211115:4682.8,211116:4700.9,211117:4688.67,211118:4704.54,211119:4697.96,211122:4682.94,211123:4690.7,211124:4701.46,211126:4594.62,211129:4655.27,211130:4567,211201:4513.04,211202:4577.1,211203:4538.43,211206:4591.67,211207:4686.75,211208:4701.21,211209:4667.45,211210:4712.02,211213:4668.97,211214:4634.09,211215:4709.85,211216:4668.67,211217:4620.64,211220:4568.02,211221:4649.23,211222:4696.56,211223:4725.79,211227:4791.19,211228:4786.35,211229:4793.06,211230:4778.73,211231:4766.18,220103:4796.56,220104:4793.54,220105:4700.58,220106:4696.05,220107:4677.03,220110:4670.29,220111:4713.07,220112:4726.35,220113:4659.03,220114:4662.85,220118:4577.11,220119:4532.76,220120:4482.73,220121:4397.94,220124:4410.13,220125:4356.45,220126:4349.93,220127:4326.51,220128:4431.85,220131:4515.55,220201:4546.54,220202:4589.38,220203:4477.44,220204:4500.53,220207:4483.87,220208:4521.54,220209:4587.18,220210:4504.08,220211:4418.64,220214:4401.67,220215:4471.07,220216:4475.01,220217:4380.26,220218:4348.87,220222:4304.76,220223:4225.5,220224:4288.7,220225:4384.65,220228:4373.94,220301:4306.26,220302:4386.54,220303:4363.49,220304:4328.87,220307:4201.09,220308:4170.7,220309:4277.88,220310:4259.52,220311:4204.31,220314:4173.11,220315:4262.45,220316:4357.86,220317:4411.67,220318:4463.12,220321:4461.18,220322:4511.61,220323:4456.24,220324:4520.16,220325:4543.06,220328:4575.52,220329:4631.6,220330:4602.45,220331:4530.41,220401:4545.86,220404:4582.64,220405:4525.12,220406:4481.15,220407:4500.21,220408:4488.28,220411:4412.53,220412:4397.45,220413:4446.59,220414:4392.59,220418:4391.69,220419:4462.21,220420:4459.45,220421:4393.66,220422:4271.78,220425:4296.12,220426:4175.2,220427:4183.96,220428:4287.5,220429:4131.93,220502:4155.38,220503:4175.48,220504:4300.17,220505:4146.87,220506:4123.34,220509:3991.24,220510:4001.05,220511:3935.18,220512:3930.08,220513:4023.89,220516:4008.01,220517:4088.85,220518:3923.68,220519:3900.79,220520:3901.36,220523:3973.75,220524:3941.48,220525:3978.73,220526:4057.84,220527:4158.24,220531:4132.15,220601:4101.23,220602:4176.82,220603:4108.54,220606:4121.43,220607:4160.68,220608:4115.77,220609:4017.82,220610:3900.86,220613:3749.63,220614:3735.48,220615:3789.99,220616:3666.77,220617:3674.84,220621:3764.79,220622:3759.89,220623:3795.73,220624:3911.74,220627:3900.11,220628:3821.55,220629:3818.83,220630:3785.38,220701:3825.33,220705:3831.39,220706:3845.08,220707:3902.62,220708:3899.38,220711:3854.43,220712:3818.8,220713:3801.78,220714:3790.38,220715:3863.16,220718:3830.85,220719:3936.69,220720:3959.9,220721:3998.95,220722:3961.63,220725:3966.84,220726:3921.05,220727:4023.61,220728:4072.43,220729:4130.29,220801:4118.63,220802:4091.19,220803:4155.17,220804:4151.94,220805:4145.19,220808:4140.06,220809:4122.47,220810:4210.24,220811:4207.27,220812:4280.15,220815:4297.14,220816:4305.2,220817:4274.04,220818:4283.74,220819:4228.48,220822:4137.99,220823:4128.73,220824:4140.77,220825:4199.12,220826:4057.66,220829:4030.61,220830:3986.16,220831:3955,220901:3966.85,220902:3924.26,220906:3908.19,220907:3979.87,220908:4006.18,220909:4067.36,220912:4110.41,220913:3932.69,220914:3946.01,220915:3901.35,220916:3873.33,220919:3899.89,220920:3855.93,220921:3789.93,220922:3757.99,220923:3693.23,220926:3655.04,220927:3647.29,220928:3719.04,220929:3640.47,220930:3585.62,221003:3678.43,221004:3790.93,221005:3783.28,221006:3744.52,221007:3639.66,221010:3612.39,221011:3588.84,221012:3577.03,221013:3669.91,221014:3583.07,221017:3677.95,221018:3719.98,221019:3695.16,221020:3665.78,221021:3752.75,221024:3797.34,221025:3859.11,221026:3830.6,221027:3807.3,221028:3901.06,221031:3871.98,221101:3856.1,221102:3759.69,221103:3719.89,221104:3770.55,221107:3806.8,221108:3828.11,221109:3748.57,221110:3956.37,221111:3992.93,221114:3957.25,221115:3991.73,221116:3958.79,221117:3946.56,221118:3965.34,221121:3949.94,221122:4003.58,221123:4027.26,221125:4026.12,221128:3963.94,221129:3957.63,221130:4080.11,221201:4076.57,221202:4071.7,221205:3998.84,221206:3941.26,221207:3933.92,221208:3963.51,221209:3934.38,221212:3990.56,221213:4019.65,221214:3995.32,221215:3895.75,221216:3852.36,221219:3817.66,221220:3821.62,221221:3878.44,221222:3822.39,221223:3844.82,221227:3829.25,221228:3783.22,221229:3849.28,221230:3839.5,230103:3824.14,230104:3852.97,230105:3808.1,230106:3895.08,230109:3892.09,230110:3919.25,230111:3969.61,230112:3983.17,230113:3999.09,230117:3990.97,230118:3928.86,230119:3898.85,230120:3972.61,230123:4019.81,230124:4016.95,230125:4016.22,230126:4060.43,230127:4070.56,230130:4017.77,230131:4076.6,230201:4119.21,230202:4179.76,230203:4136.48,230206:4111.08,230207:4164,230208:4117.86,230209:4081.5,230210:4090.46,230213:4137.29,230214:4136.13,230215:4147.6,230216:4090.41,230217:4079.09,230221:3997.34,230222:3991.05,230223:4012.32,230224:3970.04,230227:3982.24,230228:3970.15,230301:3951.39,230302:3981.35,230303:4045.64,230306:4048.42,230307:3986.37,230308:3992.01,230309:3918.32,230310:3861.59,230313:3855.76,230314:3919.29,230315:3891.93,230316:3960.28,230317:3916.64,230320:3951.57,230321:4002.87,230322:3936.97,230323:3948.72,230324:3970.99,230327:3977.53,230328:3971.27,230329:4027.81,230330:4050.83,230331:4109.31,230403:4124.51,230404:4100.6,230405:4090.38,230406:4105.02,230410:4109.11,230411:4108.94,230412:4091.95,230413:4146.22,230414:4137.64,230417:4151.32,230418:4154.87,230419:4154.52,230420:4129.79,230421:4133.52,230424:4137.04,230425:4071.63,230426:4055.99,230427:4135.35,230428:4169.48,230501:4167.87,230502:4119.58,230503:4090.75,230504:4061.22,230505:4136.25,230508:4138.12,230509:4119.17,230510:4137.64,230511:4130.62,230512:4124.08,230515:4136.28,230516:4109.9,230517:4158.77,230518:4198.05,230519:4191.98,230522:4192.63,230523:4145.58,230524:4115.24,230525:4151.28,230526:4205.45,230530:4205.52,230531:4179.83,230601:4221.02,230602:4282.37,230605:4273.79,230606:4283.85,230607:4267.52,230608:4293.93,230609:4298.86,230612:4338.93,230613:4369.01,230614:4372.59,230615:4425.84,230616:4409.59,230620:4388.71,230621:4365.69,230622:4381.89,230623:4348.33,230626:4328.82,230627:4378.41,230628:4376.86,230629:4396.44,230630:4450.38,230703:4455.59,230705:4446.82,230706:4411.59,230707:4398.95,230710:4409.53,230711:4439.26,230712:4472.16,230713:4510.04,230714:4505.42,230717:4522.79,230718:4554.98,230719:4565.72,230720:4534.87,230721:4536.34,230724:4554.64,230725:4567.46,230726:4566.75,230727:4537.41,230728:4582.23,230731:4588.96,230801:4576.73,230802:4513.39,230803:4501.89,230804:4478.03,230807:4518.44,230808:4499.38,230809:4467.71,230810:4468.83,230811:4464.05,230814:4489.72,230815:4437.86,230816:4404.33,230817:4370.36,230818:4369.71,230821:4399.77,230822:4387.55,230823:4436.01,230824:4376.31,230825:4405.71,230828:4433.31,230829:4497.63,230830:4514.87,230831:4507.66,230901:4515.77,230905:4496.83,230906:4465.48,230907:4451.14,230908:4457.49,230911:4487.46,230912:4461.9,230913:4467.44,230914:4505.1,230915:4450.32,230918:4453.53,230919:4443.95,230920:4402.2,230921:4330,230922:4320.06,230925:4337.44,230926:4273.53,230927:4274.51,230928:4299.7,230929:4288.05,231002:4288.39,231003:4229.45,231004:4263.75,231005:4258.19,231006:4308.5,231009:4335.66,231010:4358.24,231011:4376.95,231012:4349.61,231013:4327.78,231016:4373.63,231017:4373.2,231018:4314.6,231019:4278,231020:4224.16,231023:4217.04,231024:4247.68,231025:4186.77,231026:4137.23,231027:4117.37,231030:4166.82,231031:4193.8,231101:4237.86,231102:4317.78,231103:4358.34,231106:4365.98,231107:4378.38,231108:4382.78,231109:4347.35,231110:4415.24,231113:4411.55,231114:4495.7,231115:4502.88,231116:4508.24,231117:4514.02,231120:4547.38,231121:4538.19,231122:4556.62,231124:4559.34,231127:4550.43,231128:4554.89,231129:4550.58,231130:4567.8,231201:4594.63,231204:4569.78,231205:4567.18,231206:4549.34,231207:4585.59,231208:4604.37,231211:4622.44,231212:4643.7,231213:4707.09,231214:4719.55,231215:4719.19,231218:4740.56,231219:4768.37,231220:4698.35,231221:4746.75,231222:4754.63,231226:4774.75,231227:4781.58,231228:4783.35,231229:4769.83,240102:4742.83,240103:4704.81,240104:4688.68,240105:4697.24,240108:4763.54,240109:4756.5,240110:4783.45,240111:4780.24,240112:4783.83,240116:4765.98,240117:4739.21,240118:4780.94,240119:4839.81,240122:4850.43,240123:4864.6,240124:4868.55,240125:4894.16,240126:4890.97,240129:4927.93,240130:4924.97,240131:4845.65,240201:4906.19,240202:4958.61,240205:4942.81,240206:4954.23,240207:4995.06,240208:4997.91,240209:5026.61,240212:5021.84,240213:4953.17,240214:5000.62,240215:5029.73,240216:5005.57,240220:4975.51,240221:4981.8,240222:5087.03,240223:5088.8,240226:5069.53,240227:5078.18,240228:5069.76,240229:5096.27,240301:5137.08,240304:5130.95,240305:5078.65,240306:5104.76,240307:5157.36,240308:5123.69,240311:5117.94,240312:5175.27,240313:5165.31,240314:5150.48,240315:5117.09,240318:5149.42,240319:5178.51,240320:5224.62,240321:5241.53,240322:5234.18,240325:5218.19,240326:5203.58,240327:5248.49,240328:5254.35,240401:5243.77,240402:5205.81,240403:5211.49,240404:5147.21,240405:5204.34,240408:5202.39,240409:5209.91,240410:5160.64,240411:5199.06,240412:5123.41,240415:5061.82,240416:5051.41,240417:5022.21,240418:5011.12,240419:4967.23,240422:5010.6,240423:5070.55,240424:5071.63,240425:5048.42,240426:5099.96,240429:5116.17,240430:5035.69,240501:5018.39,240502:5064.2,240503:5127.79,240506:5180.74,240507:5187.7,240508:5187.67,240509:5214.08,240510:5222.68,240513:5221.42,240514:5246.68,240515:5308.15,240516:5297.1,240517:5303.27,240520:5308.13,240521:5321.41,240522:5307.01,240523:5267.84,240524:5304.72,240528:5306.04,240529:5266.95,240530:5235.48,240531:5277.51,240603:5283.4,240604:5291.34,240605:5354.03,240606:5352.96,240607:5346.99,240610:5360.79,240611:5375.32,240612:5421.03,240613:5433.74,240614:5431.6,240617:5473.23,240618:5487.03,240620:5473.17,240621:5464.62,240624:5447.87,240625:5469.3,240626:5477.9,240627:5482.87,240628:5460.48,240701:5475.09,240702:5509.01,240703:5537.02,240705:5567.19,240708:5572.85,240709:5576.98,240710:5633.91,240711:5584.54,240712:5615.35,240715:5631.22,240716:5667.2,240717:5588.27,240718:5544.59,240719:5505,240722:5564.41,240723:5555.74,240724:5427.13,240725:5399.22,240726:5459.1,240729:5463.54,240730:5436.44,240731:5522.3,240801:5446.68,240802:5346.56,240805:5186.33,240806:5240.03,240807:5199.5,240808:5319.31,240809:5344.16,240812:5344.39,240813:5434.43,240814:5455.21,240815:5543.22,240816:5554.25,240819:5608.25,240820:5597.12,240821:5620.85,240822:5570.64,240823:5634.61,240826:5616.84,240827:5625.8,240828:5592.18,240829:5591.96,240830:5648.4,240903:5528.93,240904:5520.07,240905:5503.41,240906:5408.42,240909:5471.05,240910:5495.52,240911:5554.13,240912:5595.76,240913:5626.02,240916:5633.09,240917:5634.58,240918:5618.26,240919:5713.64,240920:5702.55,240923:5718.57,240924:5732.93,240925:5722.26,240926:5745.37,240927:5738.17,240930:5762.48,241001:5708.75,241002:5709.54,241003:5699.94,241004:5751.07,241007:5695.94,241008:5751.13,241009:5792.04,241010:5780.05,241011:5815.03,241014:5859.85,241015:5815.26,241016:5842.47,241017:5841.47,241018:5864.67,241021:5853.98,241022:5851.2,241023:5797.42,241024:5809.86,241025:5808.12,241028:5823.52,241029:5832.92,241030:5813.67,241031:5705.45,241101:5728.8,241104:5712.69,241105:5782.76,241106:5929.04,241107:5973.1,241108:5995.54,241111:6001.35,241112:5983.99,241113:5985.38,241114:5949.17,241115:5870.62,241118:5893.62,241119:5916.98,241120:5917.11,241121:5948.71,241122:5969.34,241125:5987.37,241126:6021.63,241127:5998.74,241129:6032.38,241202:6047.15,241203:6049.88,241204:6086.49,241205:6075.11,241206:6090.27,241209:6052.85,241210:6034.91,241211:6084.19,241212:6051.25,241213:6051.09,241216:6074.08,241217:6050.61,241218:5872.16,241219:5867.08,241220:5930.85,241223:5974.07,241224:6040.04,241226:6037.59,241227:5970.84,241230:5906.94,241231:5881.63,250102:5868.55,250103:5942.47,250106:5975.38,250107:5909.03,250108:5918.25,250110:5827.04,250113:5836.22,250114:5842.91,250115:5949.91,250116:5937.34,250117:5996.66,250121:6049.24,250122:6086.37,250123:6118.71,250124:6101.24,250127:6012.28,250128:6067.7,250129:6039.31,250130:6071.17,250131:6040.53,250203:5994.57,250204:6037.88,250205:6061.48,250206:6083.57,250207:6025.99,250210:6066.44,250211:6068.5,250212:6051.97,250213:6115.07,250214:6114.63,250218:6129.58,250219:6144.15,250220:6117.52,250221:6013.13,250224:5983.25,250225:5955.25,250226:5956.06,250227:5861.57,250228:5954.5,250303:5849.72,250304:5778.15,250305:5842.63,250306:5738.52,250307:5770.2,250310:5614.56,250311:5572.07,250312:5599.3,250313:5521.52,250314:5638.94,250317:5675.12,250318:5614.66,250319:5675.29,250320:5662.89,250321:5667.56,250324:5767.57,250325:5776.65,250326:5712.2,250327:5693.31,250328:5580.94,250331:5611.85,250401:5633.07,250402:5670.97,250403:5396.52,250404:5074.08,250407:5062.25,250408:4982.77,250409:5456.9,250410:5268.05,250411:5363.36,250414:5405.97,250415:5396.63,250416:5275.7,250417:5282.7,250421:5158.2,250422:5287.76,250423:5375.86,250424:5484.77,250425:5525.21,250428:5528.75,250429:5560.83,250430:5569.06,250501:5604.14,250502:5686.67,250505:5650.38,250506:5606.91,250507:5631.28,250508:5663.94,250509:5659.91,250512:5844.19,250513:5886.55,250514:5892.58,250515:5916.93,250516:5958.38,250519:5963.6,250520:5940.46,250521:5844.61,250522:5842.01,250523:5802.82,250527:5921.54,250528:5888.55,250529:5912.17,250530:5911.69,250602:5935.94,250603:5970.37,250604:5970.81,250605:5939.3,250606:6000.36,250609:6005.88,250610:6038.81,250611:6022.24,250612:6045.26,250613:5976.97,250616:6033.11,250617:5982.72,250618:5980.87,250620:5967.84,250623:6025.17,250624:6092.18,250625:6092.16,250626:6141.02,250627:6173.07,250630:6204.95,250701:6198.01,250702:6227.42,250703:6279.35,250707:6229.98,250708:6225.52,250709:6263.26,250710:6280.46,250711:6259.75,250714:6268.56,250715:6243.76,250716:6263.7,250717:6297.36,250718:6296.79,250721:6305.6,250722:6309.62,250723:6358.91,250724:6363.35,250725:6388.64,250728:6389.77,250729:6370.86,250730:6362.9,250731:6339.39,250801:6238.01,250804:6329.94,250805:6299.19,250806:6345.06,250807:6340,250808:6389.45,250811:6373.45,250812:6445.76,250813:6466.58,250814:6468.54,250815:6449.8,250818:6449.15,250819:6411.37,250820:6395.78,250821:6370.17,250822:6466.91,250825:6439.32,250826:6465.94,250827:6481.4,250828:6501.86,250829:6460.26,250902:6415.54,250903:6448.26,250904:6502.08,250905:6481.5,250908:6495.15,250909:6512.61,250910:6532.04,250911:6587.47,250912:6584.29,250915:6615.28,250916:6606.76,250917:6600.35,250918:6631.96,250919:6664.36,250922:6693.75,250923:6656.92,250924:6637.97,250925:6604.72,250926:6643.7,250929:6661.21,250930:6688.46,251001:6711.2,251002:6715.35,251003:6715.79,251006:6740.28,251007:6714.59,251008:6753.72,251009:6735.11,251010:6552.51,251013:6654.72,251014:6644.31,251015:6671.06,251016:6629.07,251017:6664.01,251020:6735.13,251021:6735.35,251022:6699.4,251023:6738.44,251024:6791.69,251027:6875.16,251028:6890.89,251029:6890.59,251030:6822.34,251031:6840.2,251103:6851.97,251104:6771.55,251105:6796.29,251106:6720.32,251107:6728.8,251110:6832.43,251111:6846.61,251112:6850.92,251113:6737.49,251114:6734.11,251117:6672.41,251118:6617.32,251119:6642.16,251120:6538.76,251121:6602.99,251124:6705.12,251125:6765.88,251126:6812.61,251128:6849.09,251201:6812.63,251202:6829.37,251203:6849.72,251204:6857.12,251205:6870.4,251208:6846.51,251209:6840.51,251210:6886.68,251211:6901,251212:6827.41,251215:6816.51,251216:6800.26,251217:6721.43,251218:6774.76,251219:6834.5,251222:6878.49,251223:6909.79,251224:6932.05,251226:6929.94,251229:6905.74,251230:6896.24,251231:6845.5,260102:6858.47,260105:6902.05,260106:6944.82,260107:6920.93,260108:6921.46,260109:6966.28,260112:6977.27,260113:6963.74,260114:6926.6,260115:6944.47,260116:6940.01,260120:6796.86,260121:6875.62,260122:6913.35,260123:6915.61,260126:6950.23,260127:6978.6,260128:6978.03,260129:6969.01,260130:6939.03,260202:6976.44,260203:6917.81,260204:6882.72,260205:6798.4,260206:6932.3,260209:6964.82,260210:6941.81,260211:6941.47,260212:6832.76,260213:6836.17,260217:6843.22,260218:6881.31,260219:6861.89,260220:6909.51,260223:6837.75,260224:6890.07,260225:6946.13,260226:6908.86,260227:6878.88,260302:6881.62,260303:6816.63,260304:6869.5,260305:6830.71,260306:6740.02,260309:6795.99,260310:6781.48,260311:6775.8,260312:6672.62,260313:6632.19,260316:6699.38,260317:6716.09,260318:6624.7,260319:6606.49,260320:6506.48,260323:6581,260324:6556.37,260325:6591.9,260326:6477.16,260327:6368.85,260330:6343.72,260331:6528.52,260401:6575.32,260402:6582.69,260406:6611.83,260407:6616.85,260408:6782.81,260409:6824.66,260410:6816.89,260413:6886.24,260414:6967.38,260415:7022.95,260416:7041.28,260417:7126.06,260420:7109.14,260421:7064.01,260422:7137.9,260423:7108.4,260424:7165.08,260427:7173.91,260428:7138.8,260429:7135.95,260430:7209.01,260501:7230.12,260504:7200.75,260505:7259.22,260506:7365.12,260507:7337.11,260508:7398.93,260511:7412.84,260512:7400.96,260513:7444.25,260514:7501.24,260515:7408.5,260518:7403.05,260519:7353.61,260520:7432.97,260521:7445.72,260522:7473.47,260526:7519.12,260527:7520.36,260528:7563.63,260529:7580.06,260601:7599.96,260602:7609.78,260603:7553.68,260604:7584.31,260605:7383.74,260608:7405.73,260609:7386.65,260610:7266.99,260611:7394.3,260612:7431.46,260615:7554.29,260616:7511.35,260617:7420.1,260618:7500.58,260622:7472.79,260623:7365.46,260624:7358.22,260625:7357.49,260626:7354.02,260629:7440.43,260630:7499.36,260701:7483.23,260702:7483.24,260706:7537.43,260707:7503.85,260708:7482.71,260709:7543.64,260710:7575.39,260713:7515.34,260714:7543.59,260715:7572.4,260716:7533.77,260717:7457.69,260720:7443.28,260721:7509.2,260722:7498.96,260723:7408.3,260724:7411.98,260727:7413.18,260728:7428.78,260729:7316.15,260730:7437.63,260731:7489.72,260803:7600.5,260804:7736.52,260805:7723.55,260806:7709.96,260807:7757.64,260810:7753.11,260811:7728.2,260812:7748.5,260813:7798.99,260814:7785.76,260817:7745.06,260818:7691.76,260819:7707.98,260820:7641.16,260821:7674.37,260824:7652.86,260825:7677.28,260826:7675.7,260827:7730.99,260828:7711.76,260831:7686.14,260901:7631.47,260902:7666.6,260903:7747.71,260904:7718.6,260908:7673.52,260909:7636.36,260910:7591.7,260911:7656.98,260914:7619.98,260915:7585.73,260916:7551.81,260917:7637.76,260918:7650.5,260921:7764.7,260922:7764.64,260923:7706.03,260924:7704.13,260925:7743.41,260928:7683.69,260929:7670.84,260930:7651.54,261001:7666.45,261002:7722.72,261005:7773.95,261006:7818.93,261007:7801.77,261008:7765.36,261009:7811.54,261012:7807.24,261013:7805.45,261014:7718.94,261015:7744.06,261016:7659.44,261019:7690.73,261020:7712.57,261021:7757.17,261022:7663.43,261023:7623.68,261026:7676.77,261027:7722.6,261028:7743.98,261029:7720.3886,261030:7580.07";            // 标普500 FRED 快照
+const SNAP_EXTRA = "261029:7720.39,261030:7580.07"; // FRED 尚未收录的最近收盘（Yahoo Finance 报价）
+const SNAP_CSI = "160218:3053.7,160219:3051.58,160222:3118.87,160223:3089.36,160224:3109.55,160225:2918.75,160226:2948.03,160229:2877.47,160301:2930.69,160302:3051.33,160303:3058.42,160304:3093.89,160307:3104.84,160308:3107.67,160309:3071.91,160310:3013.15,160311:3018.28,160314:3065.69,160315:3074.78,160316:3090.03,160317:3124.2,160318:3171.96,160321:3249.44,160322:3225.79,160323:3236.09,160324:3181.85,160325:3197.82,160328:3169.73,160329:3135.41,160330:3216.28,160331:3218.09,160401:3221.89,160405:3264.49,160406:3257.53,160407:3209.29,160408:3185.73,160411:3230.1,160412:3218.45,160413:3261.38,160414:3275.83,160415:3272.21,160418:3228.45,160419:3238.3,160420:3181.03,160421:3160.6,160422:3174.9,160425:3162.03,160426:3179.16,160427:3165.92,160428:3160.58,160429:3156.75,160503:3213.54,160504:3209.46,160505:3213.92,160506:3130.35,160509:3065.62,160510:3069.11,160511:3082.81,160512:3090.14,160513:3074.94,160516:3095.31,160517:3086.02,160518:3068.04,160519:3062.5,160520:3078.22,160523:3087.22,160524:3063.56,160525:3059.23,160526:3064.21,160527:3062.5,160530:3066.71,160531:3169.56,160601:3160.55,160602:3167.1,160603:3189.33,160606:3178.79,160607:3177.05,160608:3163.99,160613:3066.34,160614:3075.98,160615:3116.37,160616:3094.67,160617:3110.36,160620:3112.67,160621:3106.32,160622:3133.96,160623:3117.32,160624:3077.16,160627:3120.54,160628:3136.4,160629:3151.39,160630:3153.92,160701:3154.2,160704:3204.7,160705:3207.38,160706:3216.8,160707:3209.95,160708:3192.28,160711:3203.33,160712:3273.18,160713:3282.87,160714:3276.76,160715:3276.28,160718:3262.02,160719:3248.23,160720:3237.6,160721:3252.52,160722:3225.16,160725:3230.89,160726:3269.59,160727:3218.24,160728:3221.14,160729:3203.93,160801:3176.81,160802:3189.05,160803:3193.51,160804:3201.29,160805:3205.11,160808:3234.18,160809:3256.98,160810:3243.34,160811:3233.36,160812:3294.23,160815:3393.42,160816:3378.25,160817:3373.05,160818:3364.49,160819:3365.02,160822:3336.79,160823:3341.83,160824:3329.86,160825:3308.97,160826:3307.09,160829:3307.78,160830:3311.99,160831:3327.79,160901:3301.58,160902:3314.11,160905:3319.68,160906:3342.63,160907:3340.82,160908:3339.56,160909:3318.04,160912:3262.6,160913:3260.33,160914:3238.73,160919:3263.12,160920:3257.4,160921:3266.64,160922:3291.12,160923:3275.67,160926:3220.28,160927:3240.75,160928:3230.89,160929:3244.39,160930:3253.28,161010:3293.87,161011:3306.56,161012:3300.01,161013:3302.65,161014:3305.85,161017:3277.88,161018:3321.33,161019:3316.24,161020:3318.6,161021:3327.74,161024:3367.58,161025:3367.45,161026:3354.8,161027:3345.7,161028:3340.13,161031:3336.28,161101:3359.05,161102:3333.35,161103:3365.08,161104:3354.17,161107:3356.59,161108:3371.12,161109:3353.05,161110:3390.61,161111:3417.22,161114:3430.25,161115:3429.87,161116:3429.59,161117:3436.53,161118:3417.46,161121:3441.11,161122:3468.36,161123:3474.73,161124:3488.74,161125:3521.3,161128:3535.08,161129:3564.04,161130:3538,161201:3565.04,161202:3528.95,161205:3469.41,161206:3459.15,161207:3475.75,161208:3470.14,161209:3493.7,161212:3409.18,161213:3405.04,161214:3378.95,161215:3340.43,161216:3346.03,161219:3328.98,161220:3309.06,161221:3338.54,161222:3335.67,161223:3307.6,161226:3322.4,161227:3316.39,161228:3301.89,161229:3297.76,161230:3310.08,170103:3342.23,170104:3368.31,170105:3367.79,170106:3347.67,170109:3363.9,170110:3358.27,170111:3334.5,170112:3317.62,170113:3319.91,170116:3319.45,170117:3326.36,170118:3339.37,170119:3329.29,170120:3354.89,170123:3364.08,170124:3364.45,170125:3375.9,170126:3387.96,170203:3364.49,170206:3373.21,170207:3365.68,170208:3383.29,170209:3396.29,170210:3413.49,170213:3436.27,170214:3435.8,170215:3421.71,170216:3440.93,170217:3421.44,170220:3471.39,170221:3482.82,170222:3489.76,170223:3473.32,170224:3473.85,170227:3446.22,170228:3452.81,170301:3458.44,170302:3435.1,170303:3427.86,170306:3446.48,170307:3453.96,170308:3448.73,170309:3426.94,170310:3427.89,170313:3458.1,170314:3456.69,170315:3463.64,170316:3481.51,170317:3445.81,170320:3449.61,170321:3466.35,170322:3450.05,170323:3461.98,170324:3489.6,170327:3478.04,170328:3469.81,170329:3465.19,170330:3436.76,170331:3456.05,170405:3503.89,170406:3514.05,170407:3517.46,170410:3505.14,170411:3517.33,170412:3509.44,170413:3514.57,170414:3486.5,170417:3479.94,170418:3462.74,170419:3445.88,170420:3461.55,170421:3466.79,170424:3431.26,170425:3440.97,170426:3445.18,170427:3446.72,170428:3439.75,170502:3426.58,170503:3413.13,170504:3404.39,170505:3382.55,170508:3358.81,170509:3352.53,170510:3337.7,170511:3356.65,170512:3385.38,170515:3399.19,170516:3428.65,170517:3409.97,170518:3398.11,170519:3403.85,170522:3411.24,170523:3424.19,170524:3424.17,170525:3485.66,170526:3480.43,170531:3492.88,170601:3497.74,170602:3486.51,170605:3468.75,170606:3492.88,170607:3533.87,170608:3560.98,170609:3576.17,170612:3574.39,170613:3582.27,170614:3535.3,170615:3528.79,170616:3518.76,170619:3553.67,170620:3546.49,170621:3587.96,170622:3590.34,170623:3622.88,170626:3668.09,170627:3674.72,170628:3646.17,170629:3668.83,170630:3666.8,170703:3650.85,170704:3619.98,170705:3659.68,170706:3660.1,170707:3655.93,170710:3653.69,170711:3670.81,170712:3658.82,170713:3686.92,170714:3703.09,170717:3663.56,170718:3667.18,170719:3729.75,170720:3747.88,170721:3728.6,170724:3743.47,170725:3719.56,170726:3705.39,170727:3712.19,170728:3721.89,170731:3737.87,170801:3770.38,170802:3760.85,170803:3727.83,170804:3707.58,170807:3726.79,170808:3732.21,170809:3731.04,170810:3715.92,170811:3647.35,170814:3694.68,170815:3706.06,170816:3701.42,170817:3721.28,170818:3724.67,170821:3740.99,170822:3752.3,170823:3756.09,170824:3734.65,170825:3795.75,170828:3842.71,170829:3834.54,170830:3834.3,170831:3822.09,170901:3830.54,170904:3845.62,170905:3857.05,170906:3849.45,170907:3829.87,170908:3825.99,170911:3825.65,170912:3837.93,170913:3842.61,170914:3829.96,170915:3831.3,170918:3843.14,170919:3832.12,170920:3842.44,170921:3837.82,170922:3837.73,170925:3817.79,170926:3820.78,170927:3821.2,170928:3822.54,170929:3836.5,171009:3882.21,171010:3889.86,171011:3902.69,171012:3912.95,171013:3921,171016:3913.45,171017:3913.07,171018:3944.16,171019:3931.25,171020:3926.85,171023:3930.8,171024:3959.4,171025:3976.95,171026:3993.58,171027:4021.97,171030:4009.72,171031:4006.72,171101:3996.62,171102:3997.13,171103:3992.7,171106:4020.89,171107:4054.25,171108:4048.01,171109:4075.9,171110:4111.91,171113:4128.07,171114:4099.35,171115:4073.67,171116:4105.01,171117:4120.85,171120:4143.83,171121:4217.7,171122:4227.57,171123:4102.4,171124:4104.2,171127:4049.95,171128:4055.82,171129:4053.75,171130:4006.1,171201:3998.14,171204:4018.86,171205:4040.17,171206:4015.82,171207:3971.06,171208:4003.38,171211:4069.5,171212:4016.02,171213:4050.09,171214:4026.15,171215:3980.86,171218:3985.29,171219:4035.33,171220:4030.49,171221:4067.85,171222:4054.6,171225:4041.54,171226:4053.62,171227:3991.21,171228:4018.9,171229:4030.85,180102:4087.4,180103:4111.39,180104:4128.81,180105:4138.75,180108:4160.16,180109:4189.3,180110:4207.81,180111:4205.59,180112:4225,180115:4225.24,180116:4258.47,180117:4248.12,180118:4271.42,180119:4285.4,180122:4336.6,180123:4382.61,180124:4389.89,180125:4365.08,180126:4381.3,180129:4302.02,180130:4256.1,180131:4275.9,180201:4245.9,180202:4271.23,180205:4274.15,180206:4148.89,180207:4050.5,180208:4012.05,180209:3840.65,180212:3890.1,180213:3935.63,180214:3966.96,180222:4052.73,180223:4071.09,180226:4118.42,180227:4058.98,180228:4023.64,180301:4049.09,180302:4016.46,180305:4018.1,180306:4066.56,180307:4036.65,180308:4077.6,180309:4108.87,180312:4127.67,180313:4091.25,180314:4073.34,180315:4096.16,180316:4056.42,180319:4074.25,180320:4077.7,180321:4061.05,180322:4020.35,180323:3904.94,180326:3879.89,180327:3913.27,180328:3842.72,180329:3894.05,180330:3898.5,180402:3886.92,180403:3862.48,180404:3854.86,180409:3852.93,180410:3927.17,180411:3938.34,180412:3898.64,180413:3871.14,180416:3808.86,180417:3748.64,180418:3766.28,180419:3811.84,180420:3760.85,180423:3766.33,180424:3843.49,180425:3828.7,180426:3755.49,180427:3756.88,180502:3763.65,180503:3793,180504:3774.6,180507:3834.19,180508:3878.68,180509:3871.62,180510:3893.06,180511:3872.84,180514:3909.29,180515:3924.1,180516:3892.84,180517:3864.05,180518:3903.06,180521:3921.24,180522:3906.21,180523:3854.58,180524:3827.22,180525:3816.5,180528:3833.26,180529:3804.01,180530:3723.37,180531:3802.38,180601:3770.59,180604:3807.58,180605:3845.32,180606:3837.35,180607:3831.01,180608:3779.62,180611:3779.98,180612:3825.95,180613:3788.34,180614:3773.37,180615:3753.43,180619:3621.12,180620:3635.44,180621:3592.97,180622:3608.9,180625:3560.48,180626:3531.11,180627:3459.26,180628:3423.53,180629:3510.98,180702:3407.96,180703:3409.28,180704:3363.75,180705:3342.44,180706:3365.12,180709:3459.18,180710:3467.52,180711:3407.53,180712:3481.06,180713:3492.69,180716:3472.09,180717:3449.38,180718:3431.32,180719:3428.34,180720:3492.89,180723:3525.75,180724:3581.71,180725:3577.75,180726:3536.25,180727:3521.23,180730:3515.08,180731:3517.66,180801:3447.39,180802:3370.96,180803:3315.28,180806:3273.27,180807:3368.87,180808:3314.51,180809:3397.53,180810:3405.02,180813:3390.34,180814:3372.91,180815:3291.98,180816:3276.73,180817:3229.62,180820:3267.25,180821:3326.65,180822:3307.95,180823:3320.03,180824:3325.33,180827:3406.57,180828:3400.17,180829:3386.57,180830:3351.09,180831:3334.5,180903:3321.82,180904:3363.9,180905:3298.14,180906:3262.88,180907:3277.64,180910:3230.07,180911:3224.21,180912:3202.02,180913:3236.57,180914:3242.09,180917:3204.92,180918:3269.43,180919:3312.48,180920:3310.13,180921:3410.49,180925:3379.8,180926:3417.24,180927:3403.59,180928:3438.86,181008:3290.9,181009:3288.69,181010:3281.6,181011:3124.11,181012:3170.73,181015:3126.45,181016:3100.97,181017:3118.25,181018:3044.39,181019:3134.95,181022:3270.27,181023:3183.43,181024:3188.2,181025:3194.31,181026:3173.64,181029:3076.89,181030:3110.26,181031:3153.82,181101:3177.03,181102:3290.25,181105:3262.84,181106:3243.15,181107:3221.91,181108:3212.77,181109:3167.44,181112:3205.14,181113:3237.38,181114:3204.94,181115:3242.37,181116:3257.67,181119:3294.6,181120:3218.41,181121:3226.49,181122:3214.43,181123:3143.48,181126:3141.24,181127:3137.24,181128:3178.93,181129:3137.65,181130:3172.69,181203:3260.95,181204:3267.71,181205:3252,181206:3181.67,181207:3181.56,181210:3144.76,181211:3159.82,181212:3170.61,181213:3219.69,181214:3165.91,181217:3161.2,181218:3128.43,181219:3091.13,181220:3067.42,181221:3029.4,181224:3038.2,181225:3017.28,181226:3002.03,181227:2990.51,181228:3010.65,190102:2969.54,190103:2964.84,190104:3035.87,190107:3054.3,190108:3047.7,190109:3078.48,190110:3072.69,190111:3094.78,190114:3067.78,190115:3127.99,190116:3128.65,190117:3111.42,190118:3168.17,190121:3185.64,190122:3143.32,190123:3141.05,190124:3158.78,190125:3184.47,190128:3183.78,190129:3193.97,190130:3168.48,190131:3201.63,190201:3247.4,190211:3306.47,190212:3330.34,190213:3397.03,190214:3402.14,190215:3338.7,190218:3445.74,190219:3439.61,190220:3451.93,190221:3442.71,190222:3520.12,190225:3729.48,190226:3684.69,190227:3678.39,190228:3669.37,190301:3749.71,190304:3794.1,190305:3816.01,190306:3848.09,190307:3808.85,190308:3657.58,190311:3729.95,190312:3755.35,190313:3724.19,190314:3698.49,190315:3745.01,190318:3851.75,190319:3833.96,190320:3835.44,190321:3836.89,190322:3833.8,190325:3742.83,190326:3700.44,190327:3743.39,190328:3728.4,190329:3872.34,190401:3973.93,190402:3971.29,190403:4022.16,190404:4062.23,190408:4057.23,190409:4075.43,190410:4085.85,190411:3997.58,190412:3988.62,190415:3975.52,190416:4085.79,190417:4087.24,190418:4072.08,190419:4120.61,190422:4025.61,190423:4019.01,190424:4030.09,190425:3941.82,190426:3889.27,190429:3900.33,190430:3913.21,190506:3684.62,190507:3720.67,190508:3667.46,190509:3599.7,190510:3730.45,190513:3668.73,190514:3645.15,190515:3727.09,190516:3743.96,190517:3648.76,190520:3617.79,190521:3666.78,190522:3649.38,190523:3583.96,190524:3593.91,190527:3637.2,190528:3672.26,190529:3663.91,190530:3641.18,190531:3629.79,190603:3632.01,190604:3598.47,190605:3597.11,190606:3564.68,190610:3610.74,190611:3719.28,190612:3691.1,190613:3685.39,190614:3654.88,190617:3654.82,190618:3667.62,190619:3715.94,190620:3828.52,190621:3833.94,190624:3841.27,190625:3801.31,190626:3794.33,190627:3834.82,190628:3825.59,190701:3935.81,190702:3937.17,190703:3893.53,190704:3873.1,190705:3893.2,190708:3802.79,190709:3793.13,190710:3786.74,190711:3785.22,190712:3808.73,190715:3824.19,190716:3806.84,190717:3804.64,190718:3768.4,190719:3807.96,190722:3781.68,190723:3789.91,190724:3819.83,190725:3851.07,190726:3858.57,190729:3854.27,190730:3870.32,190731:3835.36,190801:3803.47,190802:3747.44,190805:3675.69,190806:3636.33,190807:3621.43,190808:3669.29,190809:3633.53,190812:3699.1,190813:3665.75,190814:3682.4,190815:3694,190816:3710.54,190819:3791.09,190820:3787.73,190821:3781.76,190822:3793.51,190823:3820.86,190826:3765.91,190827:3816.95,190828:3802.58,190829:3790.19,190830:3799.59,190902:3848.32,190903:3853.61,190904:3886,190905:3925.32,190906:3948.51,190909:3972.95,190910:3959.27,190911:3930.1,190912:3972.38,190916:3957.72,190917:3891.22,190918:3910.08,190919:3924.38,190920:3935.65,190923:3890.66,190924:3901.08,190925:3870.98,190926:3841.14,190927:3852.65,190930:3814.53,191008:3837.68,191009:3843.24,191010:3874.64,191011:3911.73,191014:3953.24,191015:3936.25,191016:3922.69,191017:3925.22,191018:3869.38,191021:3880.84,191022:3895.88,191023:3871.08,191024:3870.67,191025:3896.79,191028:3926.59,191029:3910.23,191030:3891.23,191031:3886.75,191101:3952.39,191104:3978.12,191105:4002.81,191106:3984.88,191107:3991.87,191108:3973.01,191111:3902.98,191112:3903.69,191113:3899.98,191114:3905.86,191115:3877.09,191118:3907.93,191119:3947.04,191120:3907.86,191121:3889.6,191122:3849.99,191125:3878.21,191126:3891.65,191127:3875.62,191128:3862.3,191129:3828.67,191202:3836.06,191203:3851.09,191204:3849.82,191205:3879.36,191206:3902.39,191209:3895.45,191210:3900.38,191211:3902.75,191212:3891.02,191213:3968.22,191216:3987.55,191217:4041.8,191218:4032.78,191219:4027.15,191220:4017.25,191223:3967.1,191224:3992.96,191225:3990.87,191226:4025.99,191227:4022.03,191230:4081.63,191231:4096.58,200102:4152.24,200103:4144.96,200106:4129.3,200107:4160.23,200108:4112.32,200109:4164.37,200110:4163.18,200113:4203.99,200114:4189.89,200115:4166.73,200116:4149.04,200117:4154.85,200120:4185.83,200121:4114.31,200122:4131.93,200123:4003.9,200203:3688.36,200204:3785.64,200205:3828.53,200206:3899.78,200207:3899.87,200210:3916.01,200211:3952.46,200212:3984.43,200213:3959.92,200214:3987.73,200217:4077.42,200218:4057.51,200219:4051.31,200220:4144.66,200221:4149.49,200224:4132.84,200225:4123.85,200226:4073.02,200227:4084.88,200228:3940.05,200302:4069.67,200303:4091.36,200304:4115.05,200305:4206.73,200306:4138.51,200309:3997.13,200310:4082.73,200311:4028.43,200312:3950.91,200313:3895.31,200316:3727.84,200317:3709.68,200318:3636.26,200319:3589.09,200320:3653.22,200323:3530.31,200324:3625.11,200325:3722.52,200326:3698.05,200327:3710.06,200330:3674.11,200331:3686.16,200401:3675.08,200402:3734.53,200403:3713.22,200407:3798.02,200408:3780.34,200409:3792.81,200410:3769.18,200413:3753.26,200414:3825.7,200415:3797.36,200416:3802.38,200417:3839.49,200420:3853.46,200421:3808.05,200422:3839.38,200423:3829.75,200424:3796.97,200427:3822.77,200428:3849.15,200429:3867.03,200430:3912.58,200506:3936.25,200507:3924.89,200508:3963.62,200511:3960.18,200512:3960.24,200513:3968.25,200514:3925.22,200515:3912.82,200518:3922.91,200519:3956.25,200520:3935.22,200521:3913.79,200522:3824.06,200525:3829.32,200526:3872.77,200527:3845.61,200528:3856.63,200529:3867.02,200601:3971.34,200602:3983.57,200603:3983.65,200604:3982.19,200605:4001.25,200608:4021.95,200609:4047.03,200610:4039.71,200611:3995.88,200612:4003.08,200615:3954.99,200616:4014.57,200617:4017.59,200618:4044.38,200619:4098.71,200622:4102.05,200623:4121.79,200624:4138.99,200629:4109.72,200630:4163.96,200701:4247.78,200702:4335.84,200703:4419.6,200706:4670.09,200707:4698.13,200708:4774,200709:4840.77,200710:4753.13,200713:4852.96,200714:4806.69,200715:4744.47,200716:4516.25,200717:4544.7,200720:4680.3,200721:4691.04,200722:4714.45,200723:4712.44,200724:4505.59,200727:4528.45,200728:4568.26,200729:4679.01,200730:4656.15,200731:4695.05,200803:4771.31,200804:4775.8,200805:4777.11,200806:4762.76,200807:4707.93,200810:4724.87,200811:4681.78,200812:4647.64,200813:4635.71,200814:4704.63,200817:4815.23,200818:4812.76,200819:4740.68,200820:4679.15,200821:4718.84,200824:4755.85,200825:4761.95,200826:4706.13,200827:4731.35,200828:4844.27,200831:4816.22,200901:4842.12,200902:4843.89,200903:4817.1,200904:4770.22,200907:4669.37,200908:4694.39,200909:4584.59,200910:4581.98,200911:4627.28,200914:4651.05,200915:4688.48,200916:4657.36,200917:4632.71,200918:4737.09,200921:4691.43,200922:4635.76,200923:4652.33,200924:4563.07,200925:4570.02,200928:4581.91,200929:4591.8,200930:4587.4,201009:4681.14,201012:4823.16,201013:4839.2,201014:4807.1,201015:4798.74,201016:4791.68,201019:4755.49,201020:4793.47,201021:4792.83,201022:4777.98,201023:4718.49,201026:4691.24,201027:4699.28,201028:4737.27,201029:4772.92,201030:4695.33,201102:4720.83,201103:4777.56,201104:4813.66,201105:4885.11,201106:4885.72,201109:4981.35,201110:4953.88,201111:4904.9,201112:4908.46,201113:4856.85,201116:4904.17,201117:4894.79,201118:4891.67,201119:4927.99,201120:4943.29,201123:5005.03,201124:4974.29,201125:4910.7,201126:4919.59,201127:4980.77,201130:4960.25,201201:5067.1,201202:5067.14,201203:5057.06,201204:5065.92,201207:5022.24,201208:5009.88,201209:4942.7,201210:4940.52,201211:4889.63,201214:4934.84,201215:4945.1,201216:4953.87,201217:5017.48,201218:4999.97,201221:5046.84,201222:4964.77,201223:5007.12,201224:5000.02,201225:5042.01,201228:5064.41,201229:5042.94,201230:5113.71,201231:5211.29,210104:5267.72,210105:5368.5,210106:5417.67,210107:5513.66,210108:5495.43,210111:5441.16,210112:5596.35,210113:5577.97,210114:5470.46,210115:5458.08,210118:5518.52,210119:5437.52,210120:5476.43,210121:5564.97,210122:5569.78,210125:5625.92,210126:5512.97,210127:5528,210128:5377.14,210129:5351.96,210201:5417.65,210202:5501.09,210203:5485.2,210204:5473.95,210205:5483.41,210208:5564.56,210209:5686.25,210210:5807.72,210218:5768.38,210219:5778.84,210222:5597.33,210223:5579.67,210224:5437.57,210225:5469.56,210226:5336.76,210301:5418.78,210302:5349.63,210303:5452.21,210304:5280.71,210305:5262.8,210308:5080.02,210309:4971,210310:5003.61,210311:5128.22,210312:5146.38,210315:5035.54,210316:5079.36,210317:5100.86,210318:5141.77,210319:5007.09,210322:5057.15,210323:5009.25,210324:4928.69,210325:4926.35,210326:5037.99,210329:5046.88,210330:5094.73,210331:5048.36,210401:5110.78,210402:5161.56,210406:5140.34,210407:5103.74,210408:5112.21,210409:5035.34,210412:4947.75,210413:4939.64,210414:4980.63,210415:4948.97,210416:4966.18,210419:5087.02,210420:5083.37,210421:5098.74,210422:5089.24,210423:5135.45,210426:5077.24,210427:5090.52,210428:5119.24,210429:5164.17,210430:5123.49,210506:5061.12,210507:4996.05,210510:4992.42,210511:5023.06,210512:5044.55,210513:4992.97,210514:5110.59,210517:5184.99,210518:5187.6,210519:5172.27,210520:5186.41,210521:5134.15,210524:5155.59,210525:5318.48,210526:5320.59,210527:5338.23,210528:5321.09,210531:5331.57,210601:5341.68,210602:5289.97,210603:5255.29,210604:5282.28,210607:5277.63,210608:5232.12,210609:5236.45,210610:5271.47,210611:5224.7,210615:5166.56,210616:5080.49,210617:5101.89,210618:5102.47,210621:5090.39,210622:5122.16,210623:5147.39,210624:5155.97,210625:5239.97,210628:5251.76,210629:5190.54,210630:5224.04,210701:5229.66,210702:5081.12,210705:5085.79,210706:5083.1,210707:5140.49,210708:5088.26,210709:5069.44,210712:5132.71,210713:5142.1,210714:5083.08,210715:5151.46,210716:5094.77,210719:5113.49,210720:5108.99,210721:5144.04,210722:5151.75,210723:5089.23,210726:4925.3,210727:4751.31,210728:4760.48,210729:4850.27,210730:4811.17,210802:4933.74,210803:4934.46,210804:4978.85,210805:4948.67,210806:4921.56,210809:4985.56,210810:5043.15,210811:5015.34,210812:4973.35,210813:4945.98,210816:4941.07,210817:4837.4,210818:4894.24,210819:4862.14,210820:4769.27,210823:4835.88,210824:4888.39,210825:4898.16,210826:4801.61,210827:4827.04,210830:4813.27,210831:4805.61,210901:4869.46,210902:4869.41,210903:4843.06,210906:4933.73,210907:4992.83,210908:4972.13,210909:4970.01,210910:5013.52,210913:4991.66,210914:4917.16,210915:4867.32,210916:4807.7,210917:4855.94,210922:4821.77,210923:4853.2,210924:4849.43,210927:4877.37,210928:4883.83,210929:4833.93,210930:4866.38,211008:4929.94,211011:4936.19,211012:4883.84,211013:4940.11,211014:4913.61,211015:4932.11,211018:4874.78,211019:4922.72,211020:4910.18,211021:4928.02,211022:4959.73,211025:4979.52,211026:4963.1,211027:4898.16,211028:4864.14,211029:4908.77,211101:4890.69,211102:4839.85,211103:4821.11,211104:4868.74,211105:4842.35,211108:4848.18,211109:4846.74,211110:4821.19,211111:4898.65,211112:4888.37,211115:4882.38,211116:4883.32,211117:4885.75,211118:4837.62,211119:4890.06,211122:4912.4,211123:4913.35,211124:4916.66,211125:4896.44,211126:4860.13,211129:4851.42,211130:4832.03,211201:4843.85,211202:4856.16,211203:4901.02,211206:4892.62,211207:4922.1,211208:4995.93,211209:5078.69,211210:5055.12,211213:5083.8,211214:5049.7,211215:5005.9,211216:5034.73,211217:4954.76,211220:4880.42,211221:4913.49,211222:4914.45,211223:4948.74,211224:4921.34,211227:4919.32,211228:4955.96,211229:4883.48,211230:4921.51,211231:4940.37,220104:4917.77,220105:4868.12,220106:4818.23,220107:4822.37,220110:4844.05,220111:4797.77,220112:4845.58,220113:4765.92,220114:4726.73,220117:4767.28,220118:4813.35,220119:4780.38,220120:4823.51,220121:4779.31,220124:4786.74,220125:4678.45,220126:4712.31,220127:4619.88,220128:4563.77,220207:4634.09,220208:4608.77,220209:4652.06,220210:4639.86,220211:4601.4,220214:4551.69,220215:4600.1,220216:4617.99,220217:4629.16,220218:4651.24,220221:4634.31,220222:4574.15,220223:4623.05,220224:4529.32,220225:4573.42,220228:4581.65,220301:4619.69,220302:4578.6,220303:4551.63,220304:4496.43,220307:4352.78,220308:4265.39,220309:4226.35,220310:4292.84,220311:4306.52,220314:4174.76,220315:3983.81,220316:4156.08,220317:4237.7,220318:4265.9,220321:4258.75,220322:4255.3,220323:4276.52,220324:4251.31,220325:4174.57,220328:4148.47,220329:4134.14,220330:4254.1,220331:4222.6,220401:4276.16,220406:4263.84,220407:4209.1,220408:4230.77,220411:4100.07,220412:4179.97,220413:4139.74,220414:4191.57,220415:4188.75,220418:4166.38,220419:4134.9,220420:4070.79,220421:3995.83,220422:4013.25,220425:3814.91,220426:3784.12,220427:3895.54,220428:3921.11,220429:4016.24,220505:4010.21,220506:3908.82,220509:3877.44,220510:3919.87,220511:3976.42,220512:3958.74,220513:3988.6,220516:3956.54,220517:4005.89,220518:3991.91,220519:3999.6,220520:4077.6,220523:4053.98,220524:3959.15,220525:3983.18,220526:3993.04,220527:4001.3,220530:4029.02,220531:4091.52,220601:4083.18,220602:4089.57,220606:4166.09,220607:4179.13,220608:4219.81,220609:4175.67,220610:4238.99,220613:4189.35,220614:4222.31,220615:4278.22,220616:4250.06,220617:4309.04,220620:4330.43,220621:4325.57,220622:4270.62,220623:4343.88,220624:4394.77,220627:4444.26,220628:4490.52,220629:4421.36,220630:4485.01,220701:4466.72,220704:4496.03,220705:4489.54,220706:4423.97,220707:4443.47,220708:4428.78,220711:4354.62,220712:4313.62,220713:4321.46,220714:4322.07,220715:4248.53,220718:4292.59,220719:4269.34,220720:4283.8,220721:4236.06,220722:4238.23,220725:4212.64,220726:4245.98,220727:4225.04,220728:4225.67,220729:4170.1,220801:4188.68,220802:4107.02,220803:4066.98,220804:4101.54,220805:4156.91,220808:4148.07,220809:4156.29,220810:4109.74,220811:4193.54,220812:4191.15,220815:4185.68,220816:4177.84,220817:4216.96,220818:4180.1,220819:4151.07,220822:4181.4,220823:4161.08,220824:4082.42,220825:4116.24,220826:4107.55,220829:4089.52,220830:4075.79,220831:4078.84,220901:4043.74,220902:4023.61,220905:4015.43,220906:4052.28,220907:4054.98,220908:4037.68,220909:4093.79,220913:4111.11,220914:4065.36,220915:4027.12,220916:3932.68,220919:3928,220920:3932.84,220921:3903.73,220922:3869.34,220923:3856.02,220926:3836.68,220927:3892.3,220928:3828.71,220929:3827.14,220930:3804.89,221010:3720.94,221011:3727.69,221012:3784.31,221013:3752.67,221014:3842.47,221017:3846.41,221018:3838.27,221019:3776.53,221020:3754.93,221021:3742.89,221024:3633.37,221025:3627.45,221026:3656.9,221027:3631.14,221028:3541.33,221031:3508.7,221101:3634.17,221102:3677.81,221103:3647.9,221104:3767.17,221107:3775.3,221108:3749.33,221109:3714.27,221110:3685.69,221111:3788.44,221114:3794.02,221115:3865.97,221116:3834.39,221117:3818.66,221118:3801.57,221121:3769.13,221122:3769.57,221123:3773.53,221124:3756.81,221125:3775.78,221128:3733.24,221129:3848.42,221130:3853.04,221201:3894.77,221202:3870.95,221205:3946.88,221206:3968.2,221207:3958.44,221208:3959.18,221209:3998.24,221212:3953.44,221213:3945.68,221214:3954.89,221215:3951.99,221216:3954.23,221219:3893.22,221220:3829.02,221221:3830.54,221222:3836.03,221223:3828.22,221226:3843.49,221227:3887.85,221228:3871.26,221229:3856.7,221230:3871.63,230103:3887.9,230104:3892.95,230105:3968.58,230106:3980.89,230109:4013.12,230110:4017.47,230111:4010.03,230112:4017.87,230113:4074.38,230116:4137.96,230117:4137.24,230118:4130.31,230119:4156.01,230120:4181.53,230130:4201.35,230131:4156.86,230201:4195.93,230202:4181.15,230203:4141.63,230206:4086.88,230207:4094.23,230208:4076.14,230209:4130.86,230210:4106.31,230213:4143.57,230214:4145.29,230215:4123.69,230216:4093.49,230217:4034.51,230220:4133.49,230221:4144.35,230222:4106.95,230223:4103.65,230224:4061.05,230227:4043.84,230228:4069.46,230301:4126.94,230302:4117.74,230303:4130.55,230306:4109.01,230307:4048.85,230308:4034.11,230309:4019.85,230310:3967.14,230313:4008.69,230314:3984.7,230315:3986.9,230316:3939.15,230317:3958.82,230320:3939.08,230321:3982.38,230322:3999.44,230323:4039.09,230324:4027.05,230327:4012.48,230328:3999.51,230329:4006.14,230330:4038.53,230331:4050.93,230403:4090.57,230404:4103.11,230406:4096.64,230407:4123.28,230410:4104.81,230411:4100.15,230412:4097.29,230413:4068.98,230414:4092,230417:4149.38,230418:4162.03,230419:4124.56,230420:4113.02,230421:4032.57,230424:3982.64,230425:3962.67,230426:3959.23,230427:3988.42,230428:4029.09,230504:4030.25,230505:4016.88,230508:4062.66,230509:4027.88,230510:3996.87,230511:3990.66,230512:3937.76,230515:3998.89,230516:3978.21,230517:3960.17,230518:3956.07,230519:3944.54,230522:3969.33,230523:3913.19,230524:3859.09,230525:3850.5,230526:3850.95,230529:3833.94,230530:3837.75,230531:3798.54,230601:3806.87,230602:3861.83,230605:3844.25,230606:3808.16,230607:3789.34,230608:3820.19,230609:3836.7,230612:3844.43,230613:3864.91,230614:3864.02,230615:3925.5,230616:3963.35,230619:3930.91,230620:3924.24,230621:3864.03,230626:3809.7,230627:3845.43,230628:3840.8,230629:3821.84,230630:3842.45,230703:3892.88,230704:3899.01,230705:3868.81,230706:3842.75,230707:3825.7,230710:3844.33,230711:3869.49,230712:3843.44,230713:3898.42,230714:3899.1,230717:3867.17,230718:3854.94,230719:3850.87,230720:3823.69,230721:3821.91,230724:3805.22,230725:3915.12,230726:3907.01,230727:3902.35,230728:3992.74,230731:4014.63,230801:3998,230802:3969.9,230803:4004.98,230804:4020.58,230807:3990.15,230808:3979.73,230809:3967.57,230810:3975.72,230811:3884.25,230814:3855.91,230815:3846.54,230816:3818.33,230817:3831.1,230818:3784,230821:3729.56,230822:3758.23,230823:3696.63,230824:3723.43,230825:3709.15,230828:3752.62,230829:3790.11,230830:3788.51,230831:3765.27,230901:3791.49,230904:3848.95,230905:3820.32,230906:3812.03,230907:3758.47,230908:3739.99,230911:3767.54,230912:3760.6,230913:3736.65,230914:3733.51,230915:3708.78,230918:3727.71,230919:3720.5,230920:3705.69,230921:3672.44,230922:3738.93,230925:3714.6,230926:3692.89,230927:3700.5,230928:3689.52,231009:3684.73,231010:3657.13,231011:3667.55,231012:3702.38,231013:3663.41,231016:3626.6,231017:3639.4,231018:3610.58,231019:3533.54,231020:3510.59,231023:3474.24,231024:3487.13,231025:3504.46,231026:3514.14,231027:3562.39,231030:3583.77,231031:3572.51,231101:3571.03,231102:3554.19,231103:3584.14,231106:3632.61,231107:3619.76,231108:3611.07,231109:3612.83,231110:3586.49,231113:3579.41,231114:3582.06,231115:3607.25,231116:3572.36,231117:3568.07,231120:3576.32,231121:3581.07,231122:3544.42,231123:3561.52,231124:3538.01,231127:3511.94,231128:3518.52,231129:3488.31,231130:3496.2,231201:3482.88,231204:3460.14,231205:3394.26,231206:3399.6,231207:3391.28,231208:3399.46,231211:3419.45,231212:3426.8,231213:3369.61,231214:3351.96,231215:3341.55,231218:3329.37,231219:3334.04,231220:3297.5,231221:3330.87,231222:3337.23,231225:3347.45,231226:3324.79,231227:3336.36,231228:3414.54,231229:3431.11,240102:3386.35,240103:3378.3,240104:3347.05,240105:3329.11,240108:3286.06,240109:3292.5,240110:3277.13,240111:3295.67,240112:3284.17,240115:3280.92,240116:3300.88,240117:3229.08,240118:3274.73,240119:3269.78,240122:3218.9,240123:3231.93,240124:3277.11,240125:3342.92,240126:3333.82,240129:3303.96,240130:3245.04,240131:3215.35,240201:3217.71,240202:3179.63,240205:3200.42,240206:3311.69,240207:3343.63,240208:3364.93,240219:3403.81,240220:3410.85,240221:3456.87,240222:3486.67,240223:3489.74,240226:3453.36,240227:3494.79,240228:3450.26,240229:3516.08,240301:3537.8,240304:3540.87,240305:3565.51,240306:3551.05,240307:3529.72,240308:3544.91,240311:3589.26,240312:3597.49,240313:3572.36,240314:3562.22,240315:3569.99,240318:3603.53,240319:3577.63,240320:3585.38,240321:3581.09,240322:3545,240325:3525.76,240326:3543.75,240327:3502.79,240328:3520.96,240329:3537.48,240401:3595.65,240402:3580.68,240403:3567.8,240408:3536.41,240409:3533.49,240410:3504.71,240411:3504.24,240412:3475.84,240415:3549.08,240416:3511.11,240417:3565.4,240418:3569.8,240419:3541.66,240422:3530.9,240423:3506.22,240424:3521.62,240425:3530.28,240426:3584.27,240429:3623.91,240430:3604.39,240506:3657.88,240507:3659.01,240508:3630.22,240509:3664.56,240510:3666.28,240513:3664.69,240514:3657.05,240515:3626.06,240516:3640.36,240517:3677.97,240520:3690.96,240521:3676.16,240522:3684.45,240523:3641.79,240524:3601.48,240527:3635.71,240528:3609.17,240529:3613.52,240530:3594.31,240531:3579.92,240603:3588.75,240604:3615.67,240605:3594.79,240606:3592.25,240607:3574.11,240611:3542.88,240612:3544.12,240613:3526.13,240614:3541.53,240617:3536.2,240618:3545.59,240619:3528.75,240620:3503.28,240621:3495.62,240624:3476.81,240625:3457.9,240626:3480.26,240627:3454.12,240628:3461.66,240701:3478.18,240702:3471.79,240703:3463.41,240704:3445.81,240705:3431.06,240708:3401.76,240709:3439.81,240710:3428.97,240711:3468.17,240712:3472.4,240715:3476.25,240716:3498.28,240717:3501.58,240718:3520.93,240719:3539.02,240722:3514.92,240723:3439.88,240724:3418.17,240725:3399.27,240726:3409.29,240729:3390.74,240730:3369.38,240731:3442.08,240801:3419.27,240802:3384.39,240805:3343.32,240806:3342.98,240807:3341.49,240808:3342.94,240809:3331.63,240812:3325.86,240813:3334.39,240814:3309.24,240815:3341.95,240816:3345.63,240819:3356.97,240820:3332.7,240821:3321.64,240822:3313.14,240823:3327.19,240826:3324.22,240827:3305.33,240828:3286.5,240829:3277.68,240830:3321.43,240902:3265.01,240903:3273.43,240904:3252.16,240905:3257.76,240906:3231.35,240909:3192.95,240910:3195.76,240911:3186.13,240912:3172.47,240913:3159.25,240918:3171.01,240919:3196.04,240920:3201.05,240923:3212.76,240924:3351.91,240925:3401.53,240926:3545.32,240927:3703.68,240930:4017.85,241008:4256.1,241009:3955.98,241010:3997.79,241011:3887.17,241014:3961.34,241015:3855.99,241016:3831.59,241017:3788.22,241018:3925.23,241021:3935.2,241022:3957.78,241023:3973.21,241024:3928.83,241025:3956.42,241028:3964.16,241029:3924.65,241030:3889.45,241031:3891.04,241101:3890.02,241104:3944.76,241105:4044.57,241106:4024.28,241107:4145.7,241108:4104.05,241111:4131.13,241112:4085.74,241113:4110.89,241114:4039.62,241115:3968.83,241118:3950.38,241119:3976.89,241120:3985.77,241121:3989.3,241122:3865.7,241125:3848.09,241126:3840.18,241127:3907.04,241128:3872.55,241129:3916.58,241202:3947.63,241203:3951.89,241204:3930.56,241205:3921.59,241206:3973.14,241209:3966.57,241210:3995.64,241211:3988.83,241212:4028.5,241213:3933.18,241216:3911.84,241217:3922.03,241218:3941.89,241219:3945.46,241220:3927.74,241223:3933.57,241224:3983.69,241225:3985.63,241226:3987.48,241227:3981.03,241230:3999.05,241231:3934.91,250102:3820.4,250103:3775.16,250106:3768.97,250107:3796.11,250108:3789.22,250109:3779.88,250110:3732.48,250113:3722.51,250114:3820.54,250115:3796.03,250116:3800.38,250117:3812.34,250120:3829.68,250121:3832.61,250122:3797.02,250123:3803.74,250124:3832.86,250127:3817.08,250205:3795.08,250206:3842.83,250207:3892.7,250210:3901.06,250211:3883.14,250212:3919.86,250213:3905.14,250214:3939.01,250217:3947.4,250218:3912.78,250219:3940.16,250220:3928.9,250221:3978.44,250224:3969.72,250225:3925.65,250226:3959.94,250227:3968.12,250228:3890.05,250303:3888.47,250304:3885.22,250305:3902.57,250306:3956.24,250307:3944.01,250310:3928.8,250311:3941.42,250312:3927.23,250313:3911.58,250314:4006.56,250317:3996.79,250318:4007.72,250319:4010.17,250320:3974.99,250321:3914.7,250324:3934.85,250325:3932.3,250326:3919.36,250327:3932.41,250328:3915.17,250331:3887.31,250401:3887.68,250402:3884.39,250403:3861.5,250407:3589.44,250408:3650.76,250409:3686.79,250410:3735.12,250411:3750.52,250414:3759.14,250415:3761.23,250416:3772.82,250417:3772.22,250418:3772.52,250421:3784.88,250422:3783.95,250423:3786.88,250424:3784.36,250425:3786.99,250428:3781.62,250429:3775.08,250430:3770.57,250506:3808.54,250507:3831.63,250508:3852.9,250509:3846.16,250512:3890.61,250513:3896.26,250514:3943.21,250515:3907.2,250516:3889.09,250519:3877.15,250520:3898.17,250521:3916.38,250522:3913.87,250523:3882.27,250526:3860.11,250527:3839.4,250528:3836.24,250529:3858.7,250530:3840.23,250603:3852.01,250604:3868.74,250605:3877.56,250606:3873.98,250609:3885.25,250610:3865.47,250611:3894.63,250612:3892.2,250613:3864.18,250616:3873.8,250617:3870.38,250618:3874.97,250619:3843.09,250620:3846.64,250623:3857.9,250624:3904.03,250625:3960.07,250626:3946.02,250627:3921.76,250630:3936.08,250701:3942.76,250702:3943.68,250703:3968.07,250704:3982.2,250707:3965.17,250708:3998.45,250709:3991.4,250710:4010.02,250711:4014.81,250714:4017.67,250715:4019.06,250716:4007.2,250717:4034.49,250718:4058.55,250721:4085.61,250722:4118.96,250723:4119.77,250724:4149.04,250725:4127.16,250728:4135.82,250729:4152.02,250730:4151.24,250731:4075.59,250801:4054.93,250804:4070.7,250805:4103.45,250806:4113.49,250807:4114.67,250808:4104.97,250811:4122.51,250812:4143.83,250813:4176.58,250814:4173.31,250815:4202.35,250818:4239.41,250819:4223.37,250820:4271.4,250821:4288.07,250822:4378,250825:4469.22,250826:4452.59,250827:4386.13,250828:4463.78,250829:4496.76,250901:4523.71,250902:4490.45,250903:4459.83,250904:4365.21,250905:4460.32,250908:4467.57,250909:4436.26,250910:4445.36,250911:4548.03,250912:4522,250915:4533.06,250916:4523.34,250917:4551.02,250918:4498.11,250919:4501.92,250922:4522.61,250923:4519.78,250924:4566.07,250925:4593.49,250926:4550.05,250929:4620.05,250930:4640.69,251009:4709.48,251010:4616.83,251013:4593.98,251014:4539.06,251015:4606.29,251016:4618.42,251017:4514.23,251020:4538.22,251021:4607.87,251022:4592.57,251023:4606.34,251024:4660.68,251027:4716.02,251028:4691.97,251029:4747.84,251030:4709.91,251031:4640.67,251103:4653.4,251104:4618.7,251105:4627.26,251106:4693.4,251107:4678.79,251110:4695.05,251111:4652.17,251112:4645.91,251113:4702.07,251114:4628.14,251117:4598.05,251118:4568.19,251119:4588.29,251120:4564.95,251121:4453.61,251124:4448.05,251125:4490.4,251126:4517.63,251127:4515.4,251128:4526.66,251201:4576.49,251202:4554.33,251203:4531.05,251204:4546.57,251205:4584.54,251208:4621.75,251209:4598.22,251210:4591.83,251211:4552.18,251212:4580.95,251215:4552.06,251216:4497.55,251217:4579.88,251218:4552.79,251219:4568.18,251222:4611.62,251223:4620.73,251224:4634.06,251225:4642.54,251226:4657.24,251229:4639.37,251230:4651.28,251231:4629.94,260105:4717.75,260106:4790.69,260107:4776.67,260108:4737.65,260109:4758.92,260112:4789.92,260113:4761.03,260114:4741.93,260115:4751.43,260116:4731.87,260119:4734.46,260120:4718.88,260121:4723.07,260122:4723.71,260123:4702.5,260126:4706.96,260127:4705.69,260128:4717.99,260129:4753.87,260130:4706.34,260202:4605.98,260203:4660.11,260204:4698.68,260205:4670.42,260206:4643.6,260209:4719.06,260210:4724.3,260211:4713.82,260212:4719.58,260213:4660.41,260224:4707.54,260225:4735.89,260226:4726.87,260227:4710.65,260302:4728.67,260303:4655.9,260304:4602.62,260305:4647.69,260306:4660.44,260309:4615.46,260310:4674.76,260311:4704.5,260312:4687.56,260313:4669.14,260316:4671.56,260317:4637.44,260318:4658.33,260319:4583.25,260320:4567.02,260323:4418,260324:4474.72,260325:4537.47,260326:4477.53,260327:4502.57,260330:4491.95,260331:4450.05,260401:4526.07,260402:4478.91,260403:4440.79,260407:4440.62,260408:4595.56,260409:4566.22,260410:4636.57,260413:4646.15,260414:4701.28,260415:4685.25,260416:4736.61,260417:4728.67,260420:4757.44,260421:4768,260422:4799.63,260423:4786.33,260424:4769.37,260427:4770.95,260428:4758.21,260429:4810.35,260430:4807.31,260506:4877.09,260507:4900.51,260508:4871.91,260511:4951.84,260512:4948.05,260513:4998.34,260514:4914.6,260515:4859.59,260518:4833.52,260519:4852.88,260520:4850.7,260521:4783.1,260522:4845.1,260525:4921.6,260526:4947.85,260527:4908.17,260528:4914.21,260529:4892.12,260601:4844.26,260602:4914.56,260603:4938.81,260604:4904.75,260605:4816.92,260608:4713.64,260609:4801.81,260610:4748.59,260611:4722.41,260612:4777.32,260615:4891.71,260616:4884.23,260617:4931.39,260618:4941.6,260622:5059.66,260623:4919.39,260624:4943.02,260625:5020.1,260626:4868.22,260629:4926.92,260630:4979.43,260701:4958.98,260702:4812.3,260703:4842.17,260706:4842,260707:4792.26,260708:4755.53,260709:4876.31,260710:4780.79,260713:4695.38,260714:4796.5,260715:4786.78,260716:4698.43,260717:4529.1,260720:4598.32,260721:4739.23,260722:4717.24,260723:4728,260724:4649.19,260727:4702.43,260728:4569.52,260729:4600.26,260730:4549.72,260731:4588.2,260803:4543.18,260804:4600.93,260805:4658.15,260806:4651.31,260807:4694.44,260810:4702.02,260811:4663.79,260812:4690.92,260813:4663.95,260814:4665.88,260817:4741.1,260818:4725.81,260819:4588.7,260820:4592.75,260821:4618.9,260824:4563.13,260825:4552.03,260826:4590.79,260827:4630.28,260828:4609.18,260831:4625.09,260901:4611.44,260902:4547.96,260903:4552.58,260904:4548.05,260907:4575.02,260908:4558.74,260909:4572.6,260910:4548.39,260911:4510.16,260914:4480.08,260915:4450.04,260916:4480.27,260917:4460.16,260918:4507.39,260921:4539.57,260922:4544.59,260923:4517.28,260924:4439.14,260928:4340.76,260929:4345.21,260930:4357.62,261008:4310.28,261009:4317.25,261012:4287.98,261013:4275.68,261014:4217.68,261015:4166.01,261016:4170.61,261019:4174.53,261020:4152.11,261021:4111.93,261022:4036.3,261023:4105.33,261026:4103.54,261027:4049.55,261028:4083.87,261029:4041.84,261030:3985.5";    // 沪深300 东方财富快照
+const SNAP_HST = "160408:3215.62,160411:3247.36,160412:3281.22,160413:3329.2,160414:3337.42,160415:3352.19,160418:3351.24,160419:3371.82,160420:3307.23,160421:3343.83,160422:3335.98,160425:3341.54,160426:3305.65,160427:3296.73,160428:3315.17,160429:3275.92,160503:3228.89,160504:3218.41,160505:3186.94,160506:3103.36,160509:3097,160510:3084.26,160511:3125.12,160512:3113.94,160513:3088.54,160516:3111.53,160517:3140.63,160518:3108.27,160519:3094.45,160520:3060.86,160523:3080.82,160524:3089.42,160525:3122.6,160526:3117.75,160527:3165.76,160530:3216.39,160531:3239.42,160601:3244.85,160602:3257.31,160603:3275.37,160606:3286.78,160607:3359.18,160608:3308.9,160610:3233.9,160613:3154.99,160614:3152.06,160615:3209.56,160616:3151.92,160617:3172.17,160620:3191.94,160621:3216.79,160622:3260.17,160623:3241.83,160624:3171.17,160627:3162.12,160628:3138.13,160629:3171.67,160630:3197.36,160704:3205.69,160705:3171.21,160706:3130.85,160707:3147.39,160708:3154.38,160711:3166.86,160712:3225.42,160713:3229.96,160714:3263.09,160715:3260.59,160718:3274.02,160719:3270.48,160720:3311.76,160721:3360.03,160722:3368.08,160725:3352.64,160726:3340.39,160727:3357.75,160728:3364.25,160729:3318.24,160801:3356.39,160803:3365.28,160804:3381.77,160805:3434.11,160808:3533.66,160809:3508.09,160810:3493.82,160811:3530.83,160812:3564.44,160815:3573.18,160816:3640.7,160817:3595.52,160818:3659.53,160819:3669.07,160822:3686.08,160823:3635.94,160824:3616.67,160825:3583.67,160826:3647.42,160829:3672.58,160830:3761.44,160831:3713.08,160901:3699.18,160902:3730.87,160905:3771.82,160906:3848.98,160907:3813.98,160908:3852.8,160909:3829.14,160912:3678.67,160913:3685.11,160914:3715.46,160915:3790.57,160919:3810.14,160920:3795.6,160921:3841.35,160922:3849.93,160923:3822.43,160926:3704.9,160927:3755.78,160928:3756.23,160929:3800.98,160930:3726.91,161003:3799.18,161004:3811.54,161005:3821.33,161006:3841.25,161007:3823.89,161011:3788.38,161012:3776.94,161013:3714.7,161014:3743.82,161017:3703.81,161018:3787.53,161019:3783.76,161020:3806.46,161024:3808.9,161025:3813.7,161026:3788.54,161027:3762.94,161028:3753.06,161031:3713.24,161101:3768.98,161102:3726.91,161103:3709.02,161104:3720.66,161107:3752.29,161108:3766.29,161109:3716.81,161110:3834.42,161111:3779.16,161114:3703.81,161115:3670.61,161116:3709.01,161117:3701.25,161118:3760.09,161121:3757.35,161122:3764.09,161123:3755.92,161124:3733.43,161125:3722.66,161128:3797.17,161129:3778.62,161130:3781,161201:3754.03,161202:3700.1,161205:3672.67,161206:3669.11,161207:3660.88,161208:3643.64,161209:3578.99,161212:3497.68,161213:3515.69,161214:3518.27,161215:3492.38,161216:3521.26,161219:3497.6,161220:3484.06,161221:3498.68,161222:3497.75,161223:3526.4,161228:3595.16,161229:3638.33,161230:3668.26,170103:3651.91,170104:3691.09,170105:3744.2,170106:3746.93,170109:3708.8,170110:3754.15,170111:3767.64,170112:3761.71,170113:3746.71,170116:3717.89,170117:3763.26,170118:3810.36,170119:3783.57,170120:3766.41,170123:3755.51,170124:3805.19,170125:3832.27,170126:3868.87,170127:3872.26,170201:3842.29,170202:3844.48,170203:3855.12,170206:3924.41,170207:3973.99,170208:4016.55,170209:4015.39,170210:4009.17,170213:4091.24,170214:4137.05,170215:4156.3,170216:4132.77,170217:4105.43,170220:4134.2,170221:4075.66,170222:4134.54,170223:4112.2,170224:4024.12,170227:4049.95,170228:4003.45,170301:4035.11,170302:4012.36,170303:4022.97,170306:4096.43,170307:4140.85,170308:4138.81,170309:4093.25,170310:4156.6,170313:4274.25,170314:4281.05,170315:4379.24,170316:4455.93,170317:4559.32,170320:4535.11,170321:4499.64,170322:4504.58,170323:4595.45,170324:4653.51,170327:4498.67,170328:4526.38,170329:4525.01,170330:4472.22,170331:4505.92,170403:4548.02,170405:4531.58,170406:4511.97,170407:4507.84,170410:4440.36,170411:4417.35,170412:4436.43,170413:4425.52,170418:4346.35,170419:4412.38,170420:4491.81,170421:4528.45,170424:4547.47,170425:4604.87,170426:4628.82,170427:4670.52,170428:4741.69,170502:4758.68,170504:4638.53,170505:4605.77,170508:4646.23,170509:4691.93,170510:4723.37,170511:4626.84,170512:4579.81,170515:4601.58,170516:4649.81,170517:4619.38,170518:4480.48,170519:4471.69,170522:4477.58,170523:4432.79,170524:4413.77,170525:4410.34,170526:4392.59,170529:4398.33,170531:4366.8,170601:4386.35,170602:4415.69,170605:4386.6,170606:4335.28,170607:4429.6,170608:4553.58,170609:4567.72,170612:4454.5,170613:4475.15,170614:4543.09,170615:4486.27,170616:4486.86,170619:4519.6,170620:4542.05,170621:4584.17,170622:4557.79,170623:4590.63,170626:4645.78,170627:4646.8,170628:4526.65,170629:4549.08,170630:4527.6,170703:4530,170704:4438.08,170705:4516.09,170706:4567.58,170707:4589.38,170710:4580.62,170711:4612.17,170712:4664.33,170713:4759.44,170714:4758.07,170717:4791.32,170718:4955.13,170719:5151.05,170720:5191.69,170721:5062.72,170724:5067.97,170725:5057.13,170726:4944.37,170727:4930.4,170728:4891.59,170731:4914.98,170801:4870.24,170802:4933.42,170803:4839.15,170804:4887.86,170807:5006.6,170808:5067.35,170809:5029.32,170810:4987.23,170811:4790.94,170814:4958.43,170815:4962.87,170816:5015.03,170817:4974.52,170818:4948.06,170821:4984.93,170822:4994.27,170824:5016.91,170825:5078.14,170828:5038.31,170829:5060.2,170830:5086.24,170831:5127.41,170901:5136.38,170904:5118.99,170905:5200.69,170906:5163.68,170907:5140.38,170908:5083.09,170911:5094.78,170912:5192.19,170913:5261.84,170914:5255.31,170915:5223.21,170918:5318.29,170919:5258.23,170920:5317.71,170921:5361.98,170922:5311.46,170925:5121.19,170926:5097.89,170927:5247.43,170928:5233.44,170929:5264.87,171003:5394.01,171004:5397.06,171006:5528.32,171009:5566.85,171010:5661.57,171011:5548.52,171012:5568.68,171013:5646.57,171016:5672.55,171017:5656.63,171018:5602.48,171019:5470.18,171020:5616.69,171023:5659.26,171024:5549.47,171025:5586.56,171026:5554.77,171027:5507.76,171030:5603.97,171031:5626.91,171101:5764.44,171102:5717.17,171103:5777.41,171106:5896.25,171107:5922.46,171108:5897.7,171109:6081.98,171110:6126.08,171113:6247.36,171114:6142.86,171115:5907.42,171116:5915.81,171117:5877.98,171120:5960.54,171121:5998.96,171122:6060.01,171123:5926.71,171124:5917.37,171127:5756.14,171128:5817.76,171129:5740.8,171130:5598.83,171201:5576.66,171204:5635.86,171205:5476.13,171206:5206.72,171207:5220.07,171208:5367.52,171211:5459.49,171212:5347.68,171213:5363.14,171214:5319.49,171215:5278.07,171218:5202.34,171219:5311.61,171220:5274.84,171221:5352.5,171222:5416.62,171227:5362.7,171228:5526.83,171229:5549.89,180102:5637.56,180103:5702.2,180104:5752.27,180105:5759.7,180108:5752.36,180109:5778.2,180110:5712.15,180111:5790.61,180112:5812.6,180115:5643.45,180116:5704.08,180117:5660.27,180118:5610.05,180119:5664.72,180122:5728.94,180123:5756.36,180124:5749.34,180125:5679.01,180126:5697.1,180129:5547.09,180130:5496.93,180131:5547.43,180201:5493.43,180202:5555.3,180205:5471.22,180206:5110.76,180207:5117.08,180208:5177.15,180209:5026.69,180212:5037.84,180213:5161.89,180214:5249.19,180215:5358.49,180220:5443.32,180221:5498.94,180222:5460.2,180223:5499.32,180226:5626.08,180227:5592.04,180228:5561.59,180301:5646.96,180302:5559.54,180305:5463.95,180306:5596.29,180307:5568.07,180308:5631.29,180309:5748.8,180312:5844.46,180313:5843.12,180314:5815.37,180315:5823.2,180316:5798.89,180319:5801.9,180320:5890.21,180321:5791.24,180322:5668.56,180323:5455.32,180326:5534.43,180327:5606.05,180328:5345.45,180329:5308.46,180403:5335.67,180404:5164.58,180406:5164.67,180409:5285.24,180410:5421.46,180411:5377.93,180412:5346.06,180413:5320.43,180416:5287.29,180417:5169.25,180418:5182.98,180419:5266.23,180420:5139.73,180423:5045.85,180424:5095.82,180425:5009,180426:4856.64,180427:4909.5,180430:5005.22,180502:5023.57,180503:5004.52,180504:4966.02,180507:4957.35,180508:5074.66,180509:5081.66,180510:5175.41,180511:5152.68,180514:5236.05,180515:5184.22,180516:5206.81,180517:5236.71,180518:5214.82,180521:5260.18,180523:5241.12,180524:5290.39,180525:5296.96,180528:5375.91,180529:5340,180530:5294.26,180531:5356.99,180601:5340.85,180604:5408.24,180605:5468.51,180606:5606.18,180607:5589.81,180608:5505.17,180611:5572.69,180612:5598.2,180613:5464.73,180614:5366.03,180615:5333.47,180619:5074.46,180620:5144.13,180621:5068.11,180622:5118.64,180625:5023.09,180626:4987.7,180627:4794.87,180628:4806.85,180629:5002.23,180703:4932.99,180704:4770.8,180705:4719.52,180706:4753.34,180709:4887.89,180710:4819.58,180711:4771.11,180712:4945.74,180713:5008.75,180716:5022.16,180717:4932.65,180718:4906.77,180719:4847.24,180720:4830.53,180723:4799.09,180724:4873.02,180725:4918.92,180726:4854.27,180727:4892.27,180730:4815.94,180731:4686.55,180801:4687.49,180802:4576.89,180803:4497.4,180806:4468.66,180807:4581.21,180808:4597,180809:4726.44,180810:4730.61,180813:4621.48,180814:4333.8,180815:4157.61,180816:4115.83,180817:4120.63,180820:4199.03,180821:4368.6,180822:4373.03,180823:4394.84,180824:4338.29,180827:4456.74,180828:4448.97,180829:4464.8,180830:4416.56,180831:4387.95,180903:4309.32,180904:4403.18,180905:4299.75,180906:4219.89,180907:4219.85,180910:4081.53,180911:4039.7,180912:4017.13,180913:4170.23,180914:4234.91,180917:4126.91,180918:4188.19,180919:4253.18,180920:4255.39,180921:4367.26,180924:4287.3,180926:4339.89,180927:4325.72,180928:4341.42,181002:4288.69,181003:4293.06,181004:4200.48,181005:4056.44,181008:3918.76,181009:3902.88,181010:3863.03,181011:3590.76,181012:3745.62,181015:3689.31,181016:3707.81,181018:3713.06,181019:3741.58,181022:3850.93,181023:3689.98,181024:3613.64,181025:3509.81,181026:3418.55,181029:3388.31,181030:3352.88,181031:3488.15,181101:3633.35,181102:3916.73,181105:3824.84,181106:3820.66,181107:3836.46,181108:3782.3,181109:3714.49,181112:3701.01,181113:3737.12,181114:3711.82,181115:3814,181116:3853.96,181119:3897.33,181120:3753.81,181121:3806.94,181122:3788.71,181123:3725.33,181126:3753.42,181127:3780.28,181128:3848.54,181129:3805.06,181130:3808.65,181203:3925.17,181204:3954.18,181205:3859.95,181206:3712.69,181207:3699.75,181210:3643.05,181211:3703.36,181212:3741.94,181213:3758.19,181214:3658.58,181217:3643.09,181218:3562.36,181219:3546.75,181220:3474.14,181221:3464.05,181224:3422.69,181227:3386.66,181228:3416.57,181231:3460.42,190102:3345.09,190103:3253.45,190104:3287.17,190107:3332.8,190108:3342.75,190109:3391.37,190110:3432.06,190111:3473.03,190114:3405.57,190115:3483.19,190116:3469.33,190117:3456.78,190118:3584.82,190121:3626.12,190122:3545.51,190123:3515.99,190124:3577.97,190125:3676.88,190128:3653.49,190129:3672.67,190130:3659.39,190131:3733.89,190201:3767.37,190204:3771.35,190208:3817.81,190211:3940.91,190212:3962.14,190213:4077.17,190214:4070.66,190215:3926.53,190218:4003.89,190219:3914.04,190220:3984.52,190221:4104.76,190222:4285.36,190225:4291.08,190226:4201.32,190227:4146.89,190228:4117.32,190301:4209.58,190304:4297.55,190305:4365.98,190306:4408.52,190307:4280.85,190308:4169.68,190311:4246.39,190312:4242.32,190313:4185.82,190314:4076.57,190315:4149.23,190318:4188.26,190319:4188.1,190320:4134.28,190321:4085.17,190322:4112.86,190325:4040.97,190326:4038.15,190327:4087.33,190328:4102.88,190329:4147.87,190401:4175.24,190402:4206.42,190403:4274.78,190404:4264.4,190408:4281.66,190409:4390.4,190410:4445.18,190411:4342.97,190412:4362.7,190415:4339.82,190416:4361.24,190417:4420.41,190418:4419.06,190423:4404.86,190424:4422.19,190425:4286.74,190426:4330.56,190429:4309.4,190430:4285.32,190502:4289.95,190503:4338.92,190506:4110.49,190507:4135.62,190508:4062.12,190509:3932.08,190510:4030.98,190514:3896.71,190515:4005.75,190516:3919.07,190517:3782.86,190520:3696,190521:3714.06,190522:3785.59,190523:3636.44,190524:3641.84,190527:3656.56,190528:3717.74,190529:3695.02,190530:3670.52,190531:3668.73,190603:3647.53,190604:3563.42,190605:3618.15,190606:3583.56,190610:3721.4,190611:3795.42,190612:3686.06,190613:3687.83,190614:3615.75,190617:3609.45,190618:3649.09,190619:3802.38,190620:3840.26,190621:3793.47,190624:3784.81,190625:3716.32,190626:3731.29,190627:3832.35,190628:3824.67,190702:3966.67,190703:3891.66,190704:3863.72,190705:3834.65,190708:3734.36,190709:3693.79,190710:3738.5,190711:3734.47,190712:3722.88,190715:3773.61,190716:3781.81,190717:3777.03,190718:3732.2,190719:3793.49,190722:3758.62,190723:3825.32,190724:3877.03,190725:3934.76,190726:3885.61,190729:3875.28,190730:3879.37,190731:3842.92,190801:3827.56,190802:3644.03,190805:3534.81,190806:3505.88,190807:3515.76,190808:3571.13,190809:3554.13,190812:3591.74,190813:3492.81,190814:3575.14,190815:3555.48,190816:3587.54,190819:3704.29,190820:3753.37,190821:3742.43,190822:3724.53,190823:3739.12,190826:3697.37,190827:3687.33,190828:3659.98,190829:3647.28,190830:3678.96,190902:3692.84,190903:3715.6,190904:3764.02,190905:3885.72,190906:3940.03,190909:3974.42,190910:3929.23,190911:3923.79,190912:3992.8,190913:4030.21,190916:4031.38,190917:3948.48,190918:4035.29,190919:4065.5,190920:4080.69,190923:4014.88,190924:4024.03,190925:3930.59,190926:3947.68,190927:3944.41,190930:3909.73,191002:3953.24,191003:3984.88,191004:3983.44,191008:3971.4,191009:3927.76,191010:4053.16,191011:4092.87,191014:4117.73,191015:4119.93,191016:4131.87,191017:4158.26,191018:4190.47,191021:4203.71,191022:4170.94,191023:4125.16,191024:4141.93,191025:4175.15,191028:4252.75,191029:4225.45,191030:4234.04,191031:4270.66,191101:4276.98,191104:4363.87,191105:4389.91,191106:4406.22,191107:4410.99,191108:4338.27,191111:4201.83,191112:4274.65,191113:4241.97,191114:4283.88,191115:4284.37,191118:4320.67,191119:4400.45,191120:4375.66,191121:4249.5,191122:4293.8,191125:4303.59,191126:4293.94,191127:4333.06,191128:4375.13,191129:4294.92,191202:4274.39,191203:4298.57,191204:4256.63,191205:4372.52,191206:4483.82,191209:4471.46,191210:4465.88,191211:4535.4,191212:4581.44,191213:4645.82,191216:4698.19,191217:4738.77,191218:4717.83,191219:4676.12,191220:4624.25,191223:4632.46,191224:4674.34,191227:4713,191230:4696.64,191231:4714.81,200102:4852.78,200103:4829.97,200106:4795.97,200107:4843.87,200108:4810.03,200109:4948.41,200110:5017.4,200113:5186.18,200114:5107.63,200115:5182.31,200116:5223.91,200117:5309.1,200120:5301.93,200121:5136.94,200122:5345.23,200123:5162.48,200124:5210.52,200129:5129.14,200130:4813.63,200131:4809.12,200203:4853.47,200204:5035.23,200205:5096.25,200206:5231.07,200207:5280.66,200210:5296.26,200211:5283.82,200212:5340.99,200213:5418.68,200214:5315.01,200217:5417.99,200218:5295.17,200219:5329.39,200220:5412.57,200221:5316.42,200224:5235.06,200225:5342.08,200226:5202.44,200227:5304.63,200228:5071.12,200302:5149.22,200303:5182.87,200304:5140.43,200305:5239.7,200306:5187.82,200309:4859.24,200310:4948.31,200311:4851.3,200312:4598.97,200313:4594.62,200316:4194.76,200317:4223.41,200318:3988.87,200319:3988.02,200320:4237.52,200323:4016.02,200324:4210.06,200325:4414.89,200326:4429.89,200327:4415.82,200330:4306.4,200331:4441.07,200401:4396.69,200402:4507.6,200403:4453.37,200406:4599.88,200407:4711.5,200408:4679.5,200409:4697.75,200414:4745.56,200415:4788.3,200416:4891.86,200417:4931.36,200420:4992.68,200421:4877.54,200422:4991.72,200423:4988.33,200424:4859.56,200427:4937.51,200428:5025.82,200429:4996.66,200504:4829.64,200505:4896.38,200506:5049.42,200507:5050.33,200508:5168.76,200511:5231.83,200512:5314.22,200513:5329.27,200514:5382.38,200515:5467.94,200518:5349.16,200519:5500.26,200520:5568.68,200521:5438.79,200522:5138.16,200525:5258.12,200526:5382.84,200527:5260.53,200528:5150.19,200529:5259.97,200601:5496.09,200602:5523.68,200603:5646.93,200604:5653.7,200605:5699.28,200608:5649.65,200609:5663.29,200610:5718.01,200611:5664.67,200612:5703.59,200615:5579.27,200616:5880.58,200617:5926.6,200618:6063.85,200619:6132.71,200622:6136.53,200623:6350.31,200624:6454.19,200626:6476.97,200629:6334.84,200630:6376.98,200702:6666.25,200703:6911.58,200706:7242.69,200707:7078.17,200708:7446.74,200709:7776.77,200710:7683.91,200713:7736.67,200714:7461.2,200715:7371.42,200716:6725.21,200717:6859.87,200720:6880.91,200721:7376.93,200722:7036.95,200723:7225.23,200724:6862.7,200727:6774.78,200728:7012.62,200729:7085.15,200730:7100.21,200731:7155.03,200803:7292.45,200804:7436.59,200805:7547.2,200806:7576.84,200807:7386.66,200810:7176.17,200811:7129.84,200812:7010.72,200813:7031.81,200814:7038.26,200817:7075.03,200818:7196.01,200819:7150.41,200820:7167.6,200821:7168.87,200824:7329.91,200825:7223.67,200826:7275.44,200827:7540.86,200828:7580.9,200831:7543.86,200901:7674.71,200902:7909.39,200903:7706.06,200904:7588.02,200907:7240.96,200908:7123.28,200909:7015.64,200910:6999.72,200911:7178.27,200914:7317.31,200915:7348.72,200916:7430.09,200917:7301.56,200918:7371.82,200921:7195.75,200922:7233.32,200923:7298.62,200924:7054.28,200925:6918.77,200928:6978.59,200929:6977.3,200930:7087.64,201005:7092.06,201006:7336.35,201007:7494.59,201008:7511.11,201009:7503.27,201012:7748.85,201014:7819.84,201015:7541.04,201016:7604.61,201019:7570.71,201020:7644.48,201021:7618.06,201022:7620.34,201023:7484.48,201027:7547.66,201028:7656.45,201029:7675.42,201030:7534.39,201102:7585.76,201103:7714.73,201104:7758.72,201105:8181.62,201106:8152.54,201109:8394.19,201110:7961.74,201111:7465.44,201112:7706.58,201113:7939.72,201116:8075.83,201117:7933.13,201118:7972.21,201119:7903.37,201120:7997.52,201123:8088.86,201124:8107.1,201125:7921.35,201126:8057.14,201127:8090.05,201130:8019.36,201201:7985.36,201202:7848.25,201203:7940.19,201204:7952.8,201207:7944.79,201208:8085.11,201209:8101.77,201210:8025.83,201211:8080.6,201214:8128.81,201215:8094.42,201216:8146.4,201217:8332.66,201218:8253.83,201221:8159.95,201222:8186.66,201223:8426.07,201224:8142.81,201228:7795.78,201229:7997.83,201230:8295.37,201231:8425.9,210104:8489.69,210105:8463.55,210106:8609.6,210107:8400.85,210108:8630.32,210111:8665.47,210112:8726.64,210113:8669.71,210114:8895.21,210115:8775.54,210118:9116.24,210119:9374.79,210120:9885.22,210121:9809.84,210122:9765.76,210125:10206.61,210126:9967.45,210127:9807.73,210128:9372.88,210129:9358.11,210201:9765.89,210202:9976.44,210203:10125.72,210204:9897.37,210205:9795.16,210208:9756.81,210209:9961.71,210210:10214.73,210211:10411.2,210216:10694.68,210217:10945.22,210218:10591.53,210219:10560.97,210222:9977.41,210223:9863.82,210224:9360.95,210225:9496.79,210226:8954.44,210301:9298.79,210302:9257.99,210303:9366.51,210304:8819.62,210305:8634.22,210308:8081.63,210309:8063.12,210310:8216.58,210311:8640.16,210312:8456.43,210315:8264.42,210316:8530.82,210317:8574.04,210318:8676.33,210319:8551.32,210322:8508.85,210323:8295.42,210324:8040.99,210325:7944.8,210326:8129.63,210329:7981.07,210330:8180.32,210331:8183.8,210401:8569.64,210407:8451.85,210408:8458.11,210409:8305.93,210412:8169.5,210413:8038.81,210414:8225.67,210415:8142.92,210416:8232.13,210419:8346.39,210420:8311.69,210421:8185,210422:8279.74,210423:8467.75,210426:8485.24,210427:8516.45,210428:8532.76,210429:8500.13,210430:8313.18,210503:8227.89,210504:8284.12,210505:8107.9,210506:8136.87,210507:7954.82,210510:7886.02,210511:7649.68,210512:7861.18,210513:7599.62,210514:7565.31,210517:7699.96,210518:7817.69,210520:7915.72,210521:8025.31,210524:7876.61,210525:8004.37,210526:8072.46,210527:8123.88,210528:7957.63,210531:8104.35,210601:8305.74,210602:8235.1,210603:8164.34,210604:8095.64,210607:8042.73,210608:7981.01,210609:7972.09,210610:7969.17,210611:7991.12,210615:7961.02,210616:7830.67,210617:7901.52,210618:8041.45,210621:7955.95,210622:7812.23,210623:8020.23,210624:8039.76,210625:8235.63,210628:8276.63,210629:8201.05,210630:8155.37,210702:7892.4,210705:7712.19,210706:7646.94,210707:7603.77,210708:7321.98,210709:7429.49,210712:7514.15,210713:7659.59,210714:7667.56,210715:7661.25,210716:7614.35,210719:7431.99,210720:7337.55,210721:7327.7,210722:7490.13,210723:7268.14,210726:6790.96,210727:6249.65,210728:6443.31,210729:6958.77,210730:6780.97,210802:6796.25,210803:6696.66,210804:6859.4,210805:6715.33,210806:6697.1,210809:6664.91,210810:6830.15,210811:6820.68,210812:6719.19,210813:6589.54,210816:6420.14,210817:6218.89,210818:6226.69,210819:6044.03,210820:5895.06,210823:6021.27,210824:6446.18,210825:6458.97,210826:6337.03,210827:6322.28,210830:6391.17,210831:6607.78,210901:6693.66,210902:6801.47,210903:6728.84,210906:6778.49,210907:6887.94,210908:6871.28,210909:6560.39,210910:6748.36,210913:6595.03,210914:6502.35,210915:6298.09,210916:6232.93,210917:6452.19,210920:6271.37,210921:6242.61,210923:6300.49,210924:6159.96,210927:6103.89,210928:6231.55,210929:6179.43,210930:6101.52,211004:5973.8,211005:5955.22,211006:5866.15,211007:6172.04,211008:6206.77,211011:6403.69,211012:6199.75,211015:6318.91,211018:6324.27,211019:6518.59,211020:6691.33,211021:6636.18,211022:6754.34,211025:6744.74,211026:6654.19,211027:6441.62,211028:6445.17,211029:6375.85,211101:6279.39,211102:6314.31,211103:6273.44,211104:6375.32,211105:6276.52,211108:6193.98,211109:6221.85,211110:6349.94,211111:6464.53,211112:6565.53,211115:6601.15,211116:6712.31,211117:6672.28,211118:6474.55,211119:6457.97,211122:6410.89,211123:6323.48,211124:6292.16,211125:6358.54,211126:6151.99,211129:6099.35,211130:6028.63,211201:6058.8,211202:6017.56,211203:5925.52,211206:5727.49,211207:5968.5,211208:5970.23,211209:6103.16,211210:6035.23,211213:6022.23,211214:5884.82,211215:5795.44,211216:5822.14,211217:5680.47,211220:5498.49,211221:5612.69,211222:5685.29,211223:5638.31,211224:5619.39,211228:5569.42,211229:5471.87,211230:5475.7,211231:5670.96,220103:5640.47,220104:5581.9,220105:5323.47,220106:5396.65,220107:5503.91,220110:5625.5,220111:5619.67,220112:5899.82,220113:5796.78,220114:5769.05,220117:5724.5,220118:5698.54,220119:5642.91,220120:5896.71,220121:5870.57,220124:5703.63,220125:5552.68,220126:5597.03,220127:5383.63,220128:5291.7,220131:5416.29,220204:5581.63,220207:5529.51,220208:5436.92,220209:5635.5,220210:5666.99,220211:5597.05,220214:5502.18,220215:5490.28,220216:5616.38,220217:5662.28,220218:5479.9,220221:5327.44,220222:5226.7,220223:5299.24,220224:5069.79,220225:5112.62,220228:5118.02,220301:5155.69,220302:5015.74,220303:4957.61,220304:4737.93,220307:4527.83,220308:4382.32,220309:4393.91,220310:4436.65,220311:4246.97,220314:3778.6,220315:3472.42,220316:4243.39,220317:4572.79,220318:4484.93,220321:4416.33,220322:4653.7,220323:4749.12,220324:4609.02,220325:4379.33,220328:4494.01,220329:4607.09,220330:4622.57,220331:4557.99,220401:4524.25,220404:4769.99,220406:4587.73,220407:4474.13,220408:4422.74,220411:4191.03,220412:4249.59,220413:4268.91,220414:4320.1,220419:4156.42,220420:4134.04,220421:3990.08,220422:4001.08,220425:3806.19,220426:3915.27,220427:3981.14,220428:4066.89,220429:4471.75,220503:4409.93,220504:4264.91,220505:4258.88,220506:4036.26,220510:3906.43,220511:4019.28,220512:3864.95,220513:4038.97,220516:4039.36,220517:4272.95,220518:4260.37,220519:4090.72,220520:4284.42,220523:4177.65,220524:4032.34,220525:4043.69,220526:4033.79,220527:4186.95,220530:4352.02,220531:4483.6,220601:4433.38,220602:4397.74,220606:4601.95,220607:4599.48,220608:4818.36,220609:4749.57,220610:4826.42,220613:4598.65,220614:4595.74,220615:4703.72,220616:4547.22,220617:4653.36,220620:4657.37,220621:4760.14,220622:4552.33,220623:4655.91,220624:4844.58,220627:5072.89,220628:5103.89,220629:4937.23,220630:4870.3,220704:4884.18,220705:4861.4,220706:4801.75,220707:4780.04,220708:4808.47,220711:4622.92,220712:4524.11,220713:4547.1,220714:4587.73,220715:4440.11,220718:4574.4,220719:4506.74,220720:4576.86,220721:4582.36,220722:4597.64,220725:4534.34,220726:4596.34,220727:4536.62,220728:4552.54,220729:4331.19,220801:4324.03,220802:4194.04,220803:4246.13,220804:4381.12,220805:4415.86,220808:4335.54,220809:4295.24,220810:4173.77,220811:4326.85,220812:4350.07,220815:4308.31,220816:4221.03,220817:4238.9,220818:4192.64,220819:4192.31,220822:4152.04,220823:4141.04,220824:4026.45,220825:4268.54,220826:4302.17,220829:4249.17,220830:4227.43,220831:4273.68,220901:4204.03,220902:4143.53,220905:4063.91,220906:4066.83,220907:4014.01,220908:3974.05,220909:4077.32,220913:4069.29,220914:3953.37,220915:3963.31,220916:3858.46,220919:3778.77,220920:3853.98,220921:3737.32,220922:3673.8,220923:3589.63,220926:3647.39,220927:3667.41,220928:3526.23,220929:3482.52,220930:3450.12,221003:3427.13,221005:3685.51,221006:3660.72,221007:3539.87,221010:3398.88,221011:3278.24,221012:3269.54,221013:3157.75,221014:3206.63,221017:3200.12,221018:3336.25,221019:3196.58,221020:3120.83,221021:3101.37,221024:2801.99,221025:2884.79,221026:2956.41,221027:2989.18,221028:2822.92,221031:2852.57,221101:3075.16,221102:3156.59,221103:3035.39,221104:3264.23,221107:3396.64,221108:3343.76,221109:3280.48,221110:3172.76,221111:3491.7,221114:3554.39,221115:3813.86,221116:3805.25,221117:3721.61,221118:3742.7,221121:3631.97,221122:3515.37,221123:3555.02,221124:3582.95,221125:3500.31,221128:3432.86,221129:3695.8,221130:3798.19,221201:3839.27,221202:3878.81,221205:4238.2,221206:4161.21,221207:4004.31,221208:4270.21,221209:4369.53,221212:4192.67,221213:4223.2,221214:4237.66,221215:4136.42,221216:4149.22,221219:4125.06,221220:3996.36,221221:4024.84,221222:4210.53,221223:4124.33,221228:4212.44,221229:4107.43,221230:4128.79,230103:4233.37,230104:4427.17,230105:4494.22,230106:4431.12,230109:4570.72,230110:4558.58,230111:4547.12,230112:4487.07,230113:4554.78,230116:4506.72,230117:4500.54,230118:4524.67,230119:4449.91,230120:4568.79,230126:4763.61,230127:4813.23,230130:4580.22,230131:4542.58,230201:4695.7,230202:4696.55,230203:4634.19,230206:4464.82,230207:4516.31,230208:4431.58,230209:4571.71,230210:4362.22,230213:4374.9,230214:4330.6,230215:4288.75,230216:4367.1,230217:4257.63,230220:4311.61,230221:4158.04,230222:4100.58,230223:4149.12,230224:4010.66,230227:3989.83,230228:3925.06,230301:4185.62,230302:4126.31,230303:4211.31,230306:4177.25,230307:4122.6,230308:3989.28,230309:3930.94,230310:3782.22,230313:3891.48,230314:3790.62,230315:3866.26,230316:3811.81,230317:3979.8,230320:3870.27,230321:3965.17,230322:4009.13,230323:4198.99,230324:4224.85,230327:4105.69,230328:4144.12,230329:4246.35,230330:4270.32,230331:4303.71,230403:4302.52,230404:4233.42,230406:4237.63,230411:4248.14,230412:4166.77,230413:4159.85,230414:4164.03,230417:4254.01,230418:4202.67,230419:4102.02,230420:4098.35,230421:3969.94,230424:3961.17,230425:3824.09,230426:3872.01,230427:3861.98,230428:3901.52,230502:3898.59,230503:3835.06,230504:3856,230505:3895.53,230508:3914.34,230509:3798.7,230510:3811.66,230511:3862.85,230512:3874.11,230515:3925.5,230516:3958.25,230517:3870.09,230518:3917.09,230519:3821.73,230522:3903.58,230523:3852.45,230524:3775.93,230525:3691.16,230529:3647.26,230530:3702.13,230531:3626.73,230601:3630.87,230602:3824.28,230605:3840.77,230606:3834.34,230607:3921.02,230608:3894.3,230609:3934.22,230612:3944.67,230613:4038.2,230614:4052.69,230615:4198.32,230616:4233.49,230619:4178.25,230620:4075.17,230621:3961.58,230623:3879.33,230626:3872.61,230627:3972.17,230628:4001.97,230629:3933.44,230630:3911.31,230703:4054.35,230704:4074.42,230705:4016.53,230706:3948.82,230707:3901.21,230710:3945.11,230711:4003.05,230712:4081.37,230713:4237.09,230714:4228.71,230718:4129.29,230719:4114.97,230720:4063.74,230721:4104.36,230724:4015.08,230725:4257.58,230726:4218.83,230727:4341.19,230728:4466.57,230731:4549.95,230801:4538.1,230802:4388.77,230803:4406.44,230804:4497.31,230807:4499.43,230808:4374.2,230809:4373.71,230810:4378.04,230811:4273.19,230814:4208.43,230815:4179.13,230816:4126.13,230817:4158.28,230818:4007.39,230821:3923.16,230822:4000.92,230823:4008.86,230824:4158.02,230825:4058.95,230828:4127.54,230829:4234.43,230830:4195.41,230831:4179.49,230904:4305.02,230905:4193.45,230906:4176.84,230907:4091.65,230911:4083.14,230912:4063.96,230913:4041.19,230914:4059.15,230915:4077.91,230918:3987.35,230919:3984.79,230920:3921.83,230921:3849.27,230922:3991.33,230925:3882.9,230926:3817.27,230927:3833.87,230928:3778.12,230929:3920.59,231003:3817.52,231004:3752.42,231005:3757.82,231006:3816.15,231009:3825.48,231010:3874.67,231011:3952.5,231012:4019.05,231013:3879.84,231016:3811.68,231017:3836.05,231018:3771.92,231019:3700.15,231020:3662.15,231024:3622.86,231025:3700.94,231026:3712.55,231027:3806.1,231030:3854.31,231031:3759.16,231101:3752.37,231102:3813.42,231103:3937.37,231106:4098.58,231107:4055.84,231108:4020.84,231109:4024.24,231110:3892.44,231113:3981.27,231114:3951.75,231115:4125.87,231116:4049.72,231117:3980.15,231120:4077.58,231121:4037.07,231122:4029.82,231123:4117.12,231124:4024.83,231127:4031.66,231128:4000.42,231129:3910.24,231130:3899.64,231201:3830.92,231204:3759.72,231205:3682.67,231206:3747.58,231207:3720.21,231208:3705.93,231211:3666.51,231212:3730.25,231213:3686.21,231214:3698.57,231215:3780.69,231218:3730.66,231219:3707.76,231220:3726.5,231221:3710.22,231222:3548.05,231227:3639.76,231228:3763.9,231229:3764.29,240102:3714.77,240103:3646.39,240104:3654.94,240105:3592.33,240108:3484.75,240109:3454.5,240110:3428.2,240111:3503.02,240112:3470.64,240115:3404,240116:3325.93,240117:3160,240118:3176.08,240119:3129.92,240122:3035.47,240123:3147.81,240124:3281.16,240125:3310.69,240126:3186.49,240129:3203.59,240130:3098.87,240131:3005.8,240201:3065.95,240202:3043.9,240205:3038.84,240206:3243.81,240207:3190.68,240208:3168.55,240209:3127.22,240214:3197.87,240215:3223.1,240216:3342.73,240219:3253.09,240220:3264.4,240221:3351.22,240222:3410.02,240223:3399.84,240226:3393.29,240227:3503.17,240228:3426.61,240229:3431.3,240301:3488.13,240304:3474.77,240305:3323.89,240306:3412.57,240307:3359.34,240308:3385.58,240311:3482.29,240312:3643.91,240313:3656.3,240314:3603.83,240315:3549.84,240318:3594.22,240319:3528.47,240320:3551.42,240321:3582.9,240322:3455.88,240325:3437.2,240326:3471.49,240327:3393.43,240328:3477.55,240402:3543.12,240403:3460.87,240405:3450.89,240408:3444.61,240409:3478.24,240410:3552.01,240411:3538.39,240412:3474.47,240415:3442.49,240416:3337.85,240417:3340.22,240418:3356.82,240419:3278.06,240422:3336.35,240423:3449.1,240424:3573.59,240425:3554.3,240426:3718.27,240429:3713.32,240430:3700.67,240502:3865.48,240503:3971.29,240506:4007.78,240507:3922.54,240508:3872.01,240509:3947.41,240510:3962.32,240513:4018.69,240514:4041.45,240516:4072.15,240517:4112.59,240520:4135.38,240521:3980.63,240522:3992.59,240523:3896.19,240524:3799.47,240527:3864.48,240528:3854.57,240529:3765.24,240530:3752.76,240531:3690.76,240603:3784.04,240604:3796.17,240605:3807.73,240606:3840.66,240607:3772.47,240611:3755.42,240612:3691.28,240613:3739.14,240614:3707.62,240617:3709.35,240618:3697.21,240619:3832.32,240620:3767.88,240621:3701.4,240624:3677.51,240625:3655.46,240626:3689.68,240627:3588.86,240628:3554.45,240702:3539.13,240703:3626.93,240704:3649.67,240705:3596.8,240708:3566.63,240709:3600.9,240710:3600.49,240711:3696.49,240712:3782.08,240715:3672.58,240716:3622.84,240717:3640.88,240718:3613.13,240719:3536.54,240722:3610.71,240723:3545.09,240724:3491.2,240725:3421.26,240726:3443.73,240729:3466.6,240730:3414.04,240731:3516.87,240801:3476.58,240802:3385.6,240805:3339.42,240806:3342.52,240807:3382.42,240808:3366.68,240809:3436.8,240812:3429.84,240813:3429.69,240814:3395.7,240815:3384.38,240816:3459.09,240819:3517.09,240820:3498.08,240821:3434.39,240822:3508.61,240823:3468.94,240826:3502.96,240827:3501.29,240828:3445.46,240829:3461.22,240830:3560.61,240902:3486.4,240903:3496.49,240904:3482.84,240905:3487.8,240909:3436.75,240910:3450.73,240911:3450.92,240912:3475.25,240913:3479.8,240916:3497.45,240917:3536.57,240919:3651.56,240920:3703.84,240923:3698.27,240924:3915.58,240925:3924.45,240926:4209.71,240927:4453.24,240930:4751.81,241002:5157.08,241003:4978.64,241004:5227.13,241007:5386.48,241008:4695.81,241009:4640.75,241010:4736.1,241014:4668.18,241015:4450.95,241016:4402.37,241017:4349.77,241018:4600.85,241021:4491.9,241022:4521.63,241023:4605.62,241024:4483.99,241025:4538.03,241028:4574.07,241029:4623.84,241030:4513.68,241031:4499.15,241101:4483.91,241104:4532.18,241105:4693.85,241106:4574.5,241107:4677.64,241108:4668.26,241111:4651.71,241112:4456.86,241113:4455.67,241114:4318.32,241115:4327.84,241118:4341.53,241119:4395.04,241120:4413.08,241121:4358.15,241122:4246.2,241125:4235.31,241126:4221.99,241127:4374.44,241128:4307.75,241129:4353.55,241202:4405.95,241203:4417.99,241204:4404.04,241205:4370.22,241206:4464.65,241209:4656.8,241210:4591.94,241211:4531.58,241212:4600.82,241213:4479.6,241216:4414.7,241217:4389.08,241218:4468.85,241219:4439.47,241220:4444.19,241223:4457.85,241224:4507.65,241227:4538.59,241230:4500.6,241231:4468.11,250102:4357.53,250103:4403.12,250106:4395.08,250107:4354.8,250108:4307.4,250109:4311.54,250110:4260.82,250113:4221.92,250114:4352.04,250115:4363.79,250116:4417.37,250117:4479.19,250120:4595.2,250121:4693.72,250122:4581.09,250123:4515.48,250124:4657.61,250127:4687.34,250128:4723.63,250203:4737.46,250204:4977.38,250205:4930.2,250206:5059.38,250207:5150.35,250210:5286.66,250211:5142.31,250212:5281.18,250213:5235.28,250214:5526.22,250217:5499.26,250218:5639.05,250219:5672.24,250220:5500.02,250221:5859.3,250224:5789.52,250225:5698.82,250226:5953.79,250227:5881.01,250228:5568.14,250303:5535.86,250304:5535.64,250305:5757.94,250306:6068.77,250307:6037.44,250310:5885.49,250311:5967.23,250312:5845.36,250313:5747.77,250314:5880.78,250317:5872.81,250318:6105.5,250319:6041.19,250320:5836.28,250321:5639.56,250324:5736.83,250325:5517.52,250326:5573.04,250327:5589.12,250328:5506.47,250331:5394.72,250401:5407.38,250402:5426.44,250403:5313.26,250407:4401.51,250408:4568.38,250409:4689.19,250410:4813.74,250411:4900.43,250414:5015.12,250415:4981.6,250416:4796.28,250417:4887.37,250422:4899.21,250423:5049.4,250424:4975.89,250425:4982.96,250428:4988.94,250429:5019.73,250430:5087.42,250502:5244.06,250506:5239.5,250507:5200.04,250508:5228.91,250509:5180.25,250512:5447.35,250513:5269.66,250514:5381.78,250515:5297.84,250516:5281.34,250519:5255.06,250520:5315.56,250521:5342.41,250522:5251.75,250523:5246.87,250526:5157.65,250527:5182.6,250528:5174.64,250529:5301.92,250530:5170.43,250602:5134.11,250603:5189.49,250604:5219.02,250605:5319.96,250606:5286.52,250609:5433.23,250610:5392.19,250611:5451.2,250612:5331.33,250613:5239.71,250616:5299.91,250617:5291.85,250618:5214.41,250619:5088.32,250620:5133.14,250623:5187.01,250624:5297.96,250625:5359.02,250626:5345.16,250627:5341.43,250630:5302.82,250702:5269.11,250703:5233.71,250704:5216.26,250707:5229.56,250708:5325.95,250709:5231.99,250710:5216.6,250711:5248.48,250714:5283.5,250715:5431.29,250716:5418.4,250717:5448.85,250718:5538.83,250721:5585.5,250722:5606.83,250723:5745.74,250724:5743,250725:5677.9,250728:5664.02,250729:5644.38,250730:5490.76,250731:5453.14,250801:5397.4,250804:5481.25,250805:5521.07,250806:5532.17,250807:5546.73,250808:5460.3,250811:5460.02,250812:5439.16,250813:5630.78,250814:5576.03,250815:5543.17,250818:5579.18,250819:5542.03,250820:5541.27,250821:5498.5,250822:5647.68,250825:5825.09,250826:5782.24,250827:5697.53,250828:5644.02,250829:5674.31,250901:5798.96,250902:5728.46,250903:5683.74,250904:5578.86,250905:5687.45,250908:5753.75,250909:5828.74,250910:5902.69,250911:5888.77,250912:5989.27,250915:6043.61,250916:6077.66,250917:6334.24,250918:6271.22,250919:6294.42,250922:6257.91,250923:6167.06,250924:6323.15,250925:6379.19,250926:6195.11,250929:6324.25,250930:6465.66,251002:6682.86,251003:6622.85,251006:6550.3,251008:6514.19,251009:6471.34,251010:6259.75,251013:6145.51,251014:5923.26,251015:6075.27,251016:6003.56,251017:5760.38,251020:5933.17,251021:6007.94,251022:5923.09,251023:5951.45,251024:6059.89,251027:6171.08,251028:6093.44,251030:6051.76,251031:5908.08,251103:5922.48,251104:5818.29,251105:5785.85,251106:5944.22,251107:5837.36,251110:5915.56,251111:5924.39,251112:5933.99,251113:5981.3,251114:5812.8,251117:5756.88,251118:5645.73,251119:5606.9,251120:5574.59,251121:5395.49,251124:5545.56,251125:5612.03,251126:5618.36,251127:5598.05,251128:5599.11,251201:5644.76,251202:5624.04,251203:5534.92,251204:5615.43,251205:5662.46,251208:5662.55,251209:5554.68,251210:5581.1,251211:5534.59,251212:5638.05,251215:5498.42,251216:5402.51,251217:5457.95,251218:5418.29,251219:5479.04,251222:5526.83,251223:5488.89,251224:5499.3,251229:5483.01,251230:5578.38,251231:5515.98,260102:5736.44,260105:5741.63,260106:5825.26,260107:5738.52,260108:5678.34,260109:5687.14,260112:5863.2,260113:5869.79,260114:5908.26,260115:5828.35,260116:5822.18,260119:5749.98,260120:5683.44,260121:5746.3,260122:5762.44,260123:5798.01,260126:5725.99,260127:5754.72,260128:5900.16,260129:5841.1,260130:5718.18,260202:5526.31,260203:5467.26,260204:5366.44,260205:5406.13,260206:5346.2,260209:5417.6,260210:5451.03,260211:5499.99,260212:5408.98,260213:5360.42,260216:5367.52,260220:5211.5,260223:5385.35,260224:5270.7,260225:5260.5,260226:5109.33,260227:5137.84,260302:4989.37,260303:4876.53,260304:4829.5,260305:4796.33,260306:4947.5,260309:4941.73,260310:5060.53,260311:5054.85,260312:5027.64,260313:4978.08,260316:5111.78,260317:5107.64,260318:5108.3,260319:4996.28,260320:4872.38,260323:4712.48,260324:4830.89,260325:4922.94,260326:4761.54,260327:4778.01,260330:4690.08,260331:4649.82,260401:4756.45,260402:4679.1,260408:4923.25,260409:4821.67,260410:4860.26,260413:4822.01,260414:4851.96,260415:4911.79,260416:5092.08,260417:5042.68,260420:5065.63,260421:5061.5,260422:4963.94,260423:4865.52,260424:4902.2,260427:4939.84,260428:4827.19,260429:4910.02,260430:4871.32,260504:4976.7,260505:4929.68,260506:4969.2,260507:5121.1,260508:5102.79,260511:5106.4,260512:5070.61,260513:5093.85,260514:5076.2,260515:4941.14,260518:4844.94,260519:4857.46,260520:4873.82,260521:4768.9,260522:4869.57,260526:4946.88,260527:4907.57,260528:4888.58,260529:4884.23,260601:4964.92,260602:5199.28,260603:5056.97,260604:4975.36,260605:4888.39,260608:4755.91,260609:4769.61,260610:4724.79,260611:4655.74,260612:4705.2,260615:4765.58,260616:4658.65,260617:4669.07,260618:4604.35,260622:4549.41,260623:4399.22,260624:4479.02,260625:4405.92,260626:4255.59,260629:4393.01,260630:4472.23,260702:4454.28,260703:4499,260706:4541.23,260707:4507.04,260708:4731.02,260709:4731.56,260710:4721.66,260713:4676.43,260714:4679.46,260715:4740.49,260716:4834.44,260717:4623.17,260720:4752.15,260721:4814.83,260722:4668.23,260723:4698.48,260724:4629.51,260727:4702.05,260728:4730.61,260729:4864.73,260730:4803.77,260731:4829.22,260803:4875.61,260804:4885.61,260805:4933.07,260806:4820.78,260807:4858.29,260810:4919.46,260811:4824.42,260812:4776.44,260813:4792.39,260814:4707.62,260817:4782.03,260818:4739.18,260819:4682.05,260820:4700.53,260821:4766.16,260824:4594.04,260825:4588.54,260826:4626.15,260827:4620.29,260828:4605.15,260831:4619.87,260901:4550.88,260902:4517.16,260903:4468.48,260904:4569.8,260907:4527.71,260908:4454.85,260909:4420.79,260910:4330.49,260911:4320.57,260914:4317.94,260915:4291.34,260916:4325.45,260917:4310.74,260918:4405.5,260921:4423.29,260922:4438.21,260923:4379.07,260924:4361.13,260925:4311.78,260928:4296,260929:4249.62,260930:4253.89,261002:4157.94,261005:4183.68,261006:4223.08,261007:4194.49,261008:4073.38,261009:4197.84,261012:4169.57,261013:4136.63,261014:4174.47,261015:4060.99,261016:4108.24,261020:4045.91,261021:3994.77,261022:3793.93,261023:3871.66,261026:3857.53,261027:3800.43,261028:3853.72,261029:3744.14,261030:3754.9";    // 恒生科技 东方财富快照
+const SNAP_SAVED = "2026-10-31";
+const HOST = "host:claude_browser";
+const { fmt } = Core;
+const $ = id => document.getElementById(id);
+
+const MKT = {
+  spx: { key: 'spx', name: '标普500', full: '美国标普500指数', eyebrow: 'S&P 500 · 日线', srcName: 'FRED', host: 'fred.stlouisfed.org',
+    url: 'https://fred.stlouisfed.org/data/SP500.txt', parse: Core.parseFredText, extra: SNAP_EXTRA,
+    rows: Core.merge(Core.parseCompact(SNAP), Core.parseCompact(SNAP_EXTRA)), source: '每日自动更新（FRED / EODHD）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  csi300: { key: 'csi300', name: '沪深300', full: 'A股沪深300指数（000300）', eyebrow: 'CSI 300 · 000300 · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
+    url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
+    rows: Core.parseCompact(SNAP_CSI), source: '每日自动更新（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  hstech: { key: 'hstech', name: '恒生科技', full: '港股恒生科技指数（HSTECH）', eyebrow: 'Hang Seng TECH · HSTECH · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
+    url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=124.HSTECH&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
+    rows: Core.parseCompact(SNAP_HST), source: '每日自动更新（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+};
+const AI_HINT = '点按钮后，Claude 会根据上面的全部读数写一段 300 字左右的综合解读。';
+const state = { cur: 'spx', range: 252, ind: null, an: null };
+
+// ---------- 渲染 ----------
+function toneClass(x){ return x > 0 ? 'up-t' : x < 0 ? 'down-t' : ''; }
+function setChip(el, text, tone){ el.textContent = text; el.dataset.tone = tone; }
+function kv(el, pairs){
+  el.replaceChildren(...pairs.flatMap(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; return [dt, dd]; }));
+}
+function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
+
+function renderAll(){
+  const mk = MKT[state.cur];
+  state.ind = Core.compute(mk.rows);
+  state.an = Core.analyze(state.ind);
+  const { m } = state.an, an = state.an;
+  $('px').textContent = m.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const chg = $('chg'); chg.textContent = `${m.close - m.prev >= 0 ? '+' : ''}${(m.close - m.prev).toFixed(2)}  ${fmt.fp(m.chg, 2)}`; chg.className = 'chg ' + toneClass(m.chg);
+  $('asof').textContent = `收盘日 ${m.date}`;
+  $('src').textContent = `数据：${mk.source}，更新于 ${fmtTime(mk.updatedAt)}`;
+  $('h1').textContent = `${mk.name} 三线读盘`; $('eyebrow').textContent = mk.eyebrow;
+  $('ai-out').textContent = mk.aiText || AI_HINT; $('ai-btn').textContent = mk.aiText ? '重新生成解读' : '根据当前读数写一段解读';
+
+  const v = $('verdict'); v.dataset.tone = an.tone; $('v-title').textContent = an.verdict;
+  const lab = s => s > 0 ? ['偏多', 'up'] : s < 0 ? ['偏空', 'down'] : ['中性', 'flat'];
+  const chips = [['长期', an.longScore], ['中期', an.midScore], ['短期', an.shortScore]].map(([k, s]) => {
+    const [t, tone] = lab(s); const c = document.createElement('span'); c.className = 'chip'; c.dataset.tone = tone;
+    const b = document.createElement('b'); b.textContent = k; c.append(b, document.createTextNode(' ' + t)); return c; });
+  $('v-chips').replaceChildren(...chips);
+
+  setChip($('bb-chip'), an.bbState, an.bbTone);
+  $('bb-big').firstChild.textContent = fmt.f2(m.pb);
+  $('bb-m').style.left = (clamp(m.pb, 0, 1) * 100) + '%';
+  kv($('bb-kv'), [['上轨', fmt.fi(m.up)], ['中轨（20 日均线）', fmt.fi(m.ma20)], ['下轨', fmt.fi(m.lo)], ['带宽', `${fmt.f2(m.bw)}%（${Math.round(m.bwPct * 100)}% 分位）`]]);
+
+  setChip($('rsi-chip'), an.rsiState, an.rsiTone);
+  $('rsi-big').textContent = fmt.f1(m.rsi);
+  $('rsi-m').style.left = clamp(m.rsi, 0, 100) + '%';
+  kv($('rsi-kv'), [['5 个交易日前', fmt.f1(m.rsiPrev5)], ['背离', m.divergence === 'bear' ? '顶背离' : m.divergence === 'bull' ? '底背离' : '未见'], ['超买 / 超卖线', '70 / 30']]);
+
+  setChip($('bias-chip'), an.biasState, an.biasTone);
+  $('bias-big').firstChild.textContent = fmt.fp(m.b20, 2);
+  $('bias-m').style.left = (m.b20Pct * 100) + '%';
+  kv($('bias-kv'), [['对 50 日均线', fmt.fp(m.b50, 2)], ['对 200 日均线', `${fmt.fp(m.b200, 2)}（${Math.round(m.b200Pct * 100)}% 分位）`], ['距 52 周高点', fmt.fp(m.offHigh, 2)]]);
+
+  $('t-long').textContent = an.longTerm; $('t-mid').textContent = an.midTerm; $('t-short').textContent = an.shortTerm;
+
+  const tb = $('levels'); const rows = [...an.levels, { k: '最新收盘', v: m.close, dist: 0, now: true }].sort((a, b) => b.v - a.v);
+  tb.replaceChildren(...rows.map(l => { const tr = document.createElement('tr'); if (l.now) tr.className = 'now';
+    [l.k, fmt.fi(l.v), l.now ? '—' : fmt.fp(l.dist)].forEach((t, j) => { const td = document.createElement('td'); td.textContent = t; if (j) td.className = 'num'; tr.append(td); });
+    if (!l.now) tr.lastChild.classList.add(l.dist > 0 ? 'up-t' : 'down-t'); return tr; }));
+
+  $('scen').replaceChildren(...an.scenarios.map(s => { const d = document.createElement('div'); d.className = 's'; d.dataset.tone = s.tone;
+    const h = document.createElement('h3'); h.textContent = s.title; const p = document.createElement('p'); p.textContent = s.text; d.append(h, p); return d; }));
+
+  const a = an.analog;
+  $('an-def').textContent = `条件：价格在 200 日均线${m.close > m.ma200 ? '上方' : '下方'}，RSI 在 ${fmt.f1(m.rsi - 5)}–${fmt.f1(m.rsi + 5)} 之间，%B 在 ${fmt.f2(m.pb - 0.2)}–${fmt.f2(m.pb + 0.2)} 之间。统计这些交易日之后 5 天和 20 天的涨跌。`;
+  $('an-span').textContent = `样本区间 ${a.span[0]} 至 ${a.span[1]}`;
+  const stats = a.n ? [
+    [`${a.n} 天 / ${a.episodes} 段`, '符合条件的交易日'],
+    [fmt.fp(a.f5.median, 2), `之后 5 日中位涨跌，上涨占 ${Math.round(a.f5.win * 100)}%`],
+    [fmt.fp(a.f20.median, 2), `之后 20 日中位涨跌，上涨占 ${Math.round(a.f20.win * 100)}%`],
+    [`${fmt.fp(a.f20.p10, 1)} ~ ${fmt.fp(a.f20.p90, 1)}`, '20 日涨跌的 10%–90% 区间'],
+  ] : [['0', '样本期内没有足够相似的读数']];
+  $('analog').replaceChildren(...stats.map(([v, k]) => { const d = document.createElement('div'); d.className = 'stat';
+    const vv = document.createElement('span'); vv.className = 'v'; vv.textContent = v; const kk = document.createElement('span'); kk.className = 'k'; kk.textContent = k; d.append(vv, kk); return d; }));
+  if (a.n && a.n < 30) $('an-def').textContent += ` 样本只有 ${a.episodes} 段行情，结论的统计意义有限。`;
+
+  renderChart();
+}
+function fmtTime(s){ if (!s) return '—'; const d = new Date(s); if (isNaN(d)) return s; return s.length <= 10 ? s : d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+
+// ---------- 图表（手写 SVG，三层共用时间轴） ----------
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; }
+function renderChart(){
+  const ind = state.ind, N = ind.c.length, s = Math.max(0, N - state.range), idx = [];
+  for (let i = s; i < N; i++) idx.push(i);
+  const box = $('chart'); const W = Math.max(320, box.clientWidth || 800);
+  const narrow = W < 560, R = narrow ? 44 : 56, L = 4, Hp = narrow ? 220 : 280, Hr = 96, Hb = 104, G = 22, top = 8;
+  const H = top + Hp + G + Hr + G + Hb + 22;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '收盘价、布林带、200 日均线、RSI 与偏离度走势图' });
+  const x = i => L + (i - s) / Math.max(1, idx.length - 1) * (W - L - R);
+  const css = n => `var(--${n})`;
+  function panel(y0, h, lo, hi, ticks, fmtT){
+    const y = v => y0 + (hi - v) / (hi - lo) * h;
+    ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: css('grid'), 'stroke-width': 1 }, svg);
+      const tx = el('text', { x: W - R + 6, y: y(t) + 4, 'font-size': 11, fill: css('muted'), 'font-family': 'IBM Plex Mono, monospace' }, svg); tx.textContent = fmtT(t); });
+    return y;
+  }
+  function niceTicks(lo, hi, n){ const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)); const step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => span / k <= n) || mag * 10;
+    const out = []; for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) out.push(+t.toFixed(6)); return out; }
+  function path(arr, y){ let d = '', pen = false; idx.forEach(i => { const v = arr[i]; if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; }); return d; }
+
+  // 价格层
+  const vals = idx.flatMap(i => [ind.c[i], ind.up[i], ind.lo[i], ind.ma200[i]]).filter(v => v != null);
+  let pLo = Math.min(...vals), pHi = Math.max(...vals); const pad = (pHi - pLo) * 0.06; pLo -= pad; pHi += pad;
+  const yP = panel(top, Hp, pLo, pHi, niceTicks(pLo, pHi, 5), t => Math.round(t).toLocaleString('en-US'));
+  let band = ''; const bi = idx.filter(i => ind.up[i] != null);
+  if (bi.length) { band = 'M' + bi.map(i => x(i).toFixed(1) + ' ' + yP(ind.up[i]).toFixed(1)).join('L') + 'L' + bi.slice().reverse().map(i => x(i).toFixed(1) + ' ' + yP(ind.lo[i]).toFixed(1)).join('L') + 'Z';
+    el('path', { d: band, fill: css('bandfill'), stroke: 'none' }, svg); }
+  el('path', { d: path(ind.up, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1 }, svg);
+  el('path', { d: path(ind.lo, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1 }, svg);
+  el('path', { d: path(ind.ma20, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1, 'stroke-dasharray': '4 3' }, svg);
+  el('path', { d: path(ind.ma200, yP), fill: 'none', stroke: css('ma200'), 'stroke-width': 1.6 }, svg);
+  el('path', { d: path(ind.c, yP), fill: 'none', stroke: css('accent'), 'stroke-width': 1.8, 'stroke-linejoin': 'round' }, svg);
+  el('circle', { cx: x(N - 1), cy: yP(ind.c[N - 1]), r: 3.5, fill: css('accent'), stroke: css('sheet'), 'stroke-width': 1.5 }, svg);
+
+  // RSI 层
+  const y1 = top + Hp + G;
+  const lab1 = el('text', { x: L + 2, y: y1 - 6, 'font-size': 11.5, fill: css('muted'), 'font-weight': 500 }, svg); lab1.textContent = 'RSI(14)';
+  const yR = panel(y1, Hr, 0, 100, [30, 50, 70], t => String(t));
+  el('rect', { x: L, width: W - L - R, y: yR(100), height: yR(70) - yR(100), fill: css('hot-bg'), opacity: .55 }, svg);
+  el('rect', { x: L, width: W - L - R, y: yR(30), height: yR(0) - yR(30), fill: css('cold-bg'), opacity: .55 }, svg);
+  el('path', { d: path(ind.rsi, yR), fill: 'none', stroke: css('ink'), 'stroke-width': 1.3 }, svg);
+
+  // 偏离度层
+  const y2 = y1 + Hr + G;
+  const lab2 = el('text', { x: L + 2, y: y2 - 6, 'font-size': 11.5, fill: css('muted'), 'font-weight': 500 }, svg); lab2.textContent = '偏离度 %（20 日 / 200 日）';
+  const bv = idx.flatMap(i => [ind.b20[i], ind.b200[i]]).filter(v => v != null);
+  let bLo = Math.min(0, ...bv), bHi = Math.max(0, ...bv); const bp = (bHi - bLo) * 0.08 || 1; bLo -= bp; bHi += bp;
+  const yB = panel(y2, Hb, bLo, bHi, niceTicks(bLo, bHi, 4), t => (t > 0 ? '+' : '') + t);
+  el('line', { x1: L, x2: W - R, y1: yB(0), y2: yB(0), stroke: css('muted'), 'stroke-width': 1 }, svg);
+  const bw = Math.max(1, (W - L - R) / idx.length * 0.7);
+  idx.forEach(i => { const v = ind.b20[i]; if (v == null) return; el('rect', { x: x(i) - bw / 2, width: bw, y: Math.min(yB(0), yB(v)), height: Math.abs(yB(v) - yB(0)), fill: v >= 0 ? css('rise') : css('fall'), opacity: .55 }, svg); });
+  el('path', { d: path(ind.b200, yB), fill: 'none', stroke: css('ma200'), 'stroke-width': 1.5 }, svg);
+
+  // x 轴月份
+  let lastM = ''; idx.forEach(i => { const mth = ind.rows[i].d.slice(0, 7); if (mth !== lastM) { lastM = mth;
+    if (x(i) > W - R - 30) return; const step = state.range > 130 ? 2 : 1; if (+mth.slice(5) % step) return;
+    const t = el('text', { x: x(i), y: H - 6, 'font-size': 11, fill: css('muted'), 'font-family': 'IBM Plex Mono, monospace' }, svg); t.textContent = mth.slice(2).replace('-', '/'); } });
+
+  // 悬停十字线
+  const cross = el('line', { y1: top, y2: H - 20, stroke: css('muted'), 'stroke-width': 1, 'stroke-dasharray': '2 3', visibility: 'hidden' }, svg);
+  const dot = el('circle', { r: 3.5, fill: css('sheet'), stroke: css('accent'), 'stroke-width': 2, visibility: 'hidden' }, svg);
+  const hit = el('rect', { x: L, y: 0, width: W - L - R, height: H, fill: 'transparent' }, svg);
+  function show(i){
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', x(i)); dot.setAttribute('cy', yP(ind.c[i])); dot.setAttribute('visibility', 'visible');
+    readout(i);
+  }
+  function hide(){ cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); readout(N - 1); }
+  hit.addEventListener('pointermove', e => { const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width * W;
+    const i = clamp(Math.round(s + (px - L) / (W - L - R) * (idx.length - 1)), s, N - 1); show(i); });
+  hit.addEventListener('pointerleave', hide);
+  box.replaceChildren(svg); readout(N - 1);
+}
+function readout(i){
+  const ind = state.ind, ro = $('readout');
+  const items = [['日期', ind.rows[i].d], ['收盘', fmt.fi(ind.c[i])], ['%B', fmt.f2(ind.pb[i])], ['RSI', fmt.f1(ind.rsi[i])], ['对 20 日', fmt.fp(ind.b20[i], 2)], ['对 200 日', fmt.fp(ind.b200[i], 2)]];
+  ro.replaceChildren(...items.map(([k, v]) => { const sp = document.createElement('span'); const b = document.createElement('b'); b.textContent = v; sp.append(k + ' ', b); return sp; }));
+}
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  state.range = +b.dataset.r; document.querySelectorAll('.seg button').forEach(o => o.setAttribute('aria-pressed', String(o === b))); renderChart(); }));
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderChart, 150); });
+
+// ---------- 数据存储（db）与刷新（内置浏览器读取数据源） ----------
+const use = async n => { try { return window.claude && window.claude.use ? await window.claude.use(n) : null; } catch (e) { return null; } };
+let db = null, busy = null;
+function note(t, err){ const n = $('rnote'); n.textContent = t || ''; n.classList.toggle('err', !!err); }
+function syncBusy(){
+  const b = busy === state.cur, mk = MKT[state.cur];
+  $('refresh').disabled = !!busy; $('refresh-ico').hidden = !busy;
+  $('refresh-lbl').textContent = busy ? `正在读取${MKT[busy].srcName}…` : '刷新数据';
+}
+
+function applyStored(key, d){
+  const mk = MKT[key];
+  if (!d || typeof d.rows !== 'string') return false;
+  const rows = Core.parseCompact(d.rows); if (rows.length < 260) return false;
+  const merged = Core.merge(rows, Core.parseCompact(mk.extra));
+  if (merged[merged.length - 1].d < mk.rows[mk.rows.length - 1].d && rows.length < mk.rows.length) return false;
+  mk.rows = merged; mk.source = d.source || mk.srcName; mk.updatedAt = d.updatedAt || ''; mk.stored = true;
+  if (key === state.cur) renderAll(); return true;
+}
+
+function textOf(res){ return (res?.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n'); }
+let tabId = null;
+// 这些错误说明内置浏览器整体不可用，不必再试下一个数据源
+const FATAL = new Set(['server_not_connected', 'not_in_manifest', 'not_granted', 'consent_required', 'cancelled']);
+async function fetchText(mcp, url){
+  if (tabId) { try { await mcp.callTool(HOST, 'navigate', { url, tabId }); } catch (e) { if (FATAL.has(e && e.code)) throw e; tabId = null; } }
+  if (!tabId) {
+    const res = await mcp.callTool(HOST, 'preview_start', { url });
+    const m = textOf(res).match(/tabId\s+([\w-]+)/); tabId = m ? m[1] : null;
+  }
+  const page = await mcp.callTool(HOST, 'get_page_text', tabId ? { tabId, max_chars: 200000 } : { max_chars: 200000 });
+  return textOf(page);
+}
+function addDays(d, n){ const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+function eodProblem(t){
+  if (/limit|exceeded/i.test(t)) return 'EODHD 今天的调用次数已用完，明天会恢复';
+  if (/unauth|invalid|forbidden|wrong|denied|token/i.test(t)) return 'EODHD 密钥无效，请检查后重新保存';
+  return 'EODHD 没有返回数据';
+}
+async function refresh(key, auto){
+  if (busy) return;
+  const mk = MKT[key];
+  const mcp = await use('mcp');
+  if (!mcp) { if (!auto) note('自动抓取需要在 Claude 桌面应用中打开本页（由应用内置浏览器读取数据）。当前显示的是已保存的数据。', true); return; }
+  busy = key; syncBusy(); if (!auto) note('');
+  try {
+    const prevLast = mk.rows[mk.rows.length - 1].d;
+    // 1) 长历史：FRED / 东方财富
+    let base = null, baseErr = null;
+    try {
+      base = mk.parse(await fetchText(mcp, mk.url));
+      if (base.length < 300) { baseErr = { code: 'parse', message: `${mk.srcName}页面只读到 ${base.length} 行数据，可能页面没加载完或格式变了` }; base = null; }
+    } catch (e) { if (FATAL.has(e && e.code)) throw e; baseErr = e; }
+    // 2) 最近几天：EODHD（仅标普500，且已保存密钥）
+    let fresh = [], eodMsg = '';
+    if (key === 'spx' && eodKey) {
+      const from = addDays((base || mk.rows)[(base || mk.rows).length - 1].d, -10);
+      $('refresh-lbl').textContent = '正在读取 EODHD…';
+      try {
+        const t = await fetchText(mcp, `https://eodhd.com/api/eod/GSPC.INDX?api_token=${encodeURIComponent(eodKey)}&fmt=json&from=${from}`);
+        fresh = Core.parseEodhd(t); if (!fresh.length) eodMsg = eodProblem(t);
+      } catch (e) {
+        if (FATAL.has(e && e.code)) throw e;
+        eodMsg = e && e.code === 'approval_required' ? '需要先在桌面应用里允许内置浏览器访问 eodhd.com' : 'EODHD 读取失败';
+      }
+    }
+    if (!base && !fresh.length) throw baseErr || { message: eodMsg };
+    const rows = Core.merge(base || mk.rows, fresh.length ? fresh : Core.parseCompact(mk.extra));
+    mk.rows = rows;
+    mk.source = base && fresh.length ? `${mk.srcName} + EODHD（已刷新）` : base ? `${mk.srcName}（已刷新）` : '已保存数据 + EODHD（已刷新）';
+    mk.updatedAt = new Date().toISOString();
+    if (key === state.cur) renderAll();
+    const newLast = rows[rows.length - 1].d;
+    const parts = [newLast > prevLast ? `已更新到 ${newLast}` : `最新数据为 ${newLast}，没有更新的交易日`];
+    if (!base) parts.push(`${mk.srcName}读取失败（${(baseErr && baseErr.message) || '未知原因'}），历史部分沿用已保存的数据`);
+    if (eodMsg) parts.push(eodMsg);
+    note(`${mk.name}：${parts.join('；')}。`, !base || !!eodMsg);
+    try { localStorage.setItem('last-try-' + key, String(Date.now())); } catch (e) {}
+    if (mk.doc) {
+      try { await mk.doc.set({ rows: Core.toCompact(rows), updatedAt: mk.updatedAt, source: mk.source, last: newLast }); mk.stored = true; }
+      catch (e) { note(`${mk.name}：数据已刷新，但没能保存到页面存储，下次打开会重新读取。`); }
+    }
+  } catch (e) {
+    const code = e && e.code;
+    const msg = code === 'server_not_connected' || code === 'not_in_manifest' ? '内置浏览器不可用：请在 Claude 桌面应用中打开本页。'
+      : code === 'not_granted' || code === 'consent_required' ? '没有获得使用内置浏览器的许可，可在本页的权限菜单里重新开启。'
+      : code === 'cancelled' ? '读取被取消。'
+      : code === 'approval_required' ? `需要先在桌面应用里允许内置浏览器访问 ${mk.host}。`
+      : (e && e.message) ? '刷新失败：' + e.message : '刷新失败，请稍后再试。';
+    if (!auto || (code !== 'not_granted' && code !== 'server_not_connected')) note(`${mk.name}：${msg}`, true);
+    if (code === 'not_granted' || code === 'server_not_connected') queue.length = 0;
+  } finally { busy = null; syncBusy(); runQueue(); }
+}
+// 自动刷新按顺序排队，同一时间只用一个浏览器标签页
+const queue = [];
+function enqueue(key){ if (!queue.includes(key)) queue.push(key); runQueue(); }
+function runQueue(){ if (busy || !queue.length) return; const k = queue.shift(); try { localStorage.setItem('last-try-' + k, String(Date.now())); } catch (e) {} refresh(k, true); }
+$('refresh').addEventListener('click', () => refresh(state.cur, false));
+
+// 数据过期判断：距上次更新超过 12 小时，且距上次自动尝试超过 6 小时
+function stale(key){
+  const mk = MKT[key];
+  const u = Date.parse(mk.updatedAt); const age = isNaN(u) ? Infinity : Date.now() - u;
+  let lastTry = 0; try { lastTry = +localStorage.getItem('last-try-' + key) || 0; } catch (e) {}
+  return age > 12 * 3600e3 && Date.now() - lastTry > 6 * 3600e3;
+}
+function watch(key){
+  const mk = MKT[key]; let decided = false;
+  const decide = needed => { if (decided) return; decided = true; if (needed || stale(key)) enqueue(key); };
+  mk.doc = db.doc('series/' + key);
+  const timer = setTimeout(() => { note('页面存储暂时连不上，先显示内置快照。'); decide(false); }, 10000);
+  mk.doc.onSnapshot(snap => {
+    if (snap.metadata && snap.metadata.fromCache) { if (snap.exists) applyStored(key, snap.data()); return; }
+    clearTimeout(timer); const had = snap.exists && applyStored(key, snap.data());
+    decide(!had);
+  }, () => { clearTimeout(timer); decide(false); });
+}
+
+// ---------- EODHD 密钥（存在本人私有的 data/users/<id>/ 下） ----------
+let eodKey = '', keyDoc = null;
+function eodUI(){
+  const onSpx = state.cur === 'spx';
+  $('eod-toggle').hidden = !onSpx; if (!onSpx) { $('eod-form').hidden = true; $('eod-toggle').setAttribute('aria-expanded', 'false'); }
+  $('eod-state').textContent = !keyDoc ? '不可用' : eodKey ? '已设置' : '未设置';
+  $('eod-clear').hidden = !eodKey;
+}
+$('eod-toggle').addEventListener('click', () => {
+  const f = $('eod-form'); f.hidden = !f.hidden; $('eod-toggle').setAttribute('aria-expanded', String(!f.hidden));
+  if (!f.hidden) { if (!keyDoc) note('保存密钥需要登录 claude.ai 打开本页。', true); else $('eod-key').focus(); }
+});
+$('eod-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!keyDoc) { note('保存密钥需要登录 claude.ai 打开本页。', true); return; }
+  const v = $('eod-key').value.trim();
+  if (!v) { note('请先粘贴 EODHD 密钥。', true); return; }
+  if (!/^[A-Za-z0-9._-]{6,}$/.test(v)) { note('这串密钥里有空格或特殊字符，请确认复制的是完整的 API 密钥。', true); return; }
+  try {
+    await keyDoc.set({ key: v, savedAt: new Date().toISOString() });
+    eodKey = v; $('eod-key').value = ''; $('eod-form').hidden = true; $('eod-toggle').setAttribute('aria-expanded', 'false'); eodUI();
+    note('EODHD 密钥已保存。点"刷新数据"就会用它补上最近几天。');
+  } catch (err) { note('密钥没能保存，请稍后再试。', true); }
+});
+$('eod-clear').addEventListener('click', async () => {
+  if (!keyDoc) return;
+  try { await keyDoc.delete(); eodKey = ''; eodUI(); note('已清除保存的 EODHD 密钥。'); }
+  catch (err) { note('没能清除密钥，请稍后再试。', true); }
+});
+async function loadKey(){
+  const user = await use('user'); const uid = user ? await user.id().catch(() => null) : null;
+  if (!db || !uid) { eodUI(); return; }
+  keyDoc = db.collection('data/users/' + uid).doc('eodhd');
+  await new Promise(resolve => {
+    const t = setTimeout(resolve, 4000);
+    keyDoc.onSnapshot(s => {
+      eodKey = s.exists ? String((s.data() || {}).key || '') : ''; eodUI();
+      if (!s.metadata || !s.metadata.fromCache) { clearTimeout(t); resolve(); }
+    }, () => { clearTimeout(t); eodUI(); resolve(); });
+  });
+}
+
+// ---------- 市场切换 ----------
+function selectMarket(key, fromHash){
+  if (!MKT[key]) key = 'spx';
+  state.cur = key; note('');
+  document.querySelectorAll('.mkt button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.m === key)));
+  if (!fromHash && location.hash !== '#' + key) { try { history.replaceState(null, '', '#' + key); } catch (e) { location.hash = key; } }
+  renderAll(); syncBusy(); eodUI();
+}
+document.querySelectorAll('.mkt button').forEach(b => b.addEventListener('click', () => selectMarket(b.dataset.m)));
+window.addEventListener('hashchange', () => selectMarket(location.hash.slice(1), true));
+
+async function boot(){
+  selectMarket(location.hash.slice(1), true);
+  db = await use('db');
+  await loadKey();
+  if (db) { watch(state.cur); Object.keys(MKT).filter(k => k !== state.cur).forEach(watch); }
+  else { if (stale(state.cur)) enqueue(state.cur); }
+}
+
+// ---------- Claude 解读 ----------
+let aiCtl = null;
+$('ai-btn').addEventListener('click', async () => {
+  const out = $('ai-out'), btn = $('ai-btn');
+  const sample = await use('sample');
+  if (!sample) { out.textContent = '当前环境用不了 Claude 解读（需要登录 claude.ai 打开本页）。上面的规则化分析不受影响。'; return; }
+  if (aiCtl) aiCtl.abort(); aiCtl = new AbortController();
+  btn.disabled = true; btn.textContent = '正在写…'; out.textContent = 'Claude 正在阅读读数…';
+  const key = state.cur, mk = MKT[key];
+  const { m, analog } = state.an, r = x => x == null ? null : +x.toFixed(2);
+  const data = { 收盘日: m.date, 收盘: r(m.close), 日涨跌pct: r(m.chg), 布林上轨: r(m.up), 中轨MA20: r(m.ma20), 布林下轨: r(m.lo), pctB: r(m.pb),
+    带宽pct: r(m.bw), 带宽一年分位: r(m.bwPct), 近期是否收口后突破: m.recentSqueeze && (m.pb > 1 || m.pb < 0), RSI14: r(m.rsi), RSI五日前: r(m.rsiPrev5), 背离: m.divergence,
+    MA50: r(m.ma50), MA100: r(m.ma100), MA200: r(m.ma200), MA200近20日斜率pct: r(m.ma200Slope), 偏离MA20pct: r(m.b20), 偏离MA20一年分位: r(m.b20Pct), 偏离MA50pct: r(m.b50),
+    偏离MA200pct: r(m.b200), 距52周高点pct: r(m.offHigh), 跌破或站上MA100天数: m.x100, 规则判断: state.an.verdict,
+    历史相似: analog.n ? { 交易日数: analog.n, 行情段数: analog.episodes, 五日中位pct: r(analog.f5.median), 五日上涨比例: r(analog.f5.win), 二十日中位pct: r(analog.f20.median), 二十日上涨比例: r(analog.f20.win) } : '无' };
+  const prompt = `你是一位克制、严谨的市场技术分析师。下面是${mk.full}最新的技术指标读数（JSON）。\n\n${JSON.stringify(data)}\n\n请用简体中文写一段约 300 字的后市解读，分三小段：1) 三个指标合起来说明了什么；2) 接下来几周最关键的观察点和价位；3) 这些指标的局限（例如滞后、超卖可以持续、历史样本小）。要求：只依据给出的数字，不编造新闻或基本面；不要给出买入或卖出建议；用纯文本，不要 Markdown 标记。`;
+  try {
+    const res = await sample(prompt, { signal: aiCtl.signal, modelTier: 'default', cache: false, onText: u => { mk.aiText = u.text; if (state.cur === key) out.textContent = u.text; } });
+    mk.aiText = res.text;
+  } catch (e) {
+    if (e && e.code === 'not_granted') out.textContent = '没有获得调用 Claude 的许可。';
+    else if (e && e.code === 'rate_limited') out.textContent = '调用太频繁了，请过一会儿再试。';
+    else if (!(e && e.code === 'cancelled')) out.textContent = (e && e.text) || '解读没能生成，请稍后再试。';
+  } finally { btn.disabled = false; btn.textContent = MKT[state.cur].aiText ? '重新生成解读' : '根据当前读数写一段解读'; }
+});
+
+boot();
+})();
+</script>
+
+</body>
+</html>

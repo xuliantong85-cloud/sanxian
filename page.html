@@ -1,0 +1,664 @@
+<title>标普·沪深·恒科三线读盘</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;800&display=swap">
+<style>
+/* 布局：一条读数带（收盘 + 总判断）→ 三张指标卡 → 共用时间轴的三层图 → 分周期解读、价位、情景、历史统计 */
+:root{
+  --paper:#F2F4F6; --sheet:#FFFFFF; --ink:#15202B; --muted:#5D6977; --rule:#D9DFE6; --grid:#E7EBF0;
+  --accent:#23439C; --band:#8EA2C9; --bandfill:rgba(35,67,156,.07); --ma200:#B26B12;
+  --rise:#1D7A4D; --fall:#C2362B; --hot:#C2541A; --cold:#1F6F8B; --flat:#6B7684;
+  --hot-bg:#FBEDE4; --cold-bg:#E3F0F4; --rise-bg:#E2F1E8; --fall-bg:#F8E6E4; --flat-bg:#ECEFF2;
+  --display:"Noto Serif SC","Songti SC","STSong",serif;
+  --body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F151C; --sheet:#161E27; --ink:#E4E9EF; --muted:#93A0AF; --rule:#2A3542; --grid:#202A35;
+  --accent:#8FA9F0; --band:#5F75A6; --bandfill:rgba(143,169,240,.09); --ma200:#E0A04A;
+  --rise:#5CC48E; --fall:#F0776B; --hot:#F09A5E; --cold:#6CC0DA; --flat:#9AA6B4;
+  --hot-bg:#3A2418; --cold-bg:#15303A; --rise-bg:#16301F; --fall-bg:#3A1C1A; --flat-bg:#222C37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0F151C; --sheet:#161E27; --ink:#E4E9EF; --muted:#93A0AF; --rule:#2A3542; --grid:#202A35;
+  --accent:#8FA9F0; --band:#5F75A6; --bandfill:rgba(143,169,240,.09); --ma200:#E0A04A;
+  --rise:#5CC48E; --fall:#F0776B; --hot:#F09A5E; --cold:#6CC0DA; --flat:#9AA6B4;
+  --hot-bg:#3A2418; --cold-bg:#15303A; --rise-bg:#16301F; --fall-bg:#3A1C1A; --flat-bg:#222C37; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:.02em}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;font-weight:500}
+p{margin:0}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 市场切换 */
+.mkt{display:flex;gap:4px;border-bottom:1px solid var(--rule);overflow-x:auto}
+.mkt button{border:0;background:transparent;color:var(--muted);padding:8px 14px 10px;font-size:15px;font-weight:700;border-bottom:3px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+.mkt button small{font-size:11.5px;font-weight:500;letter-spacing:.04em}
+.mkt button:hover{color:var(--ink)}
+.mkt button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+/* 顶部读数带 */
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 24px;align-items:end;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.title h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,34px);letter-spacing:.02em}
+.title .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.quote{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.quote .px{font-family:var(--mono);font-size:clamp(28px,5vw,40px);font-weight:600;letter-spacing:-.01em}
+.quote .chg{font-family:var(--mono);font-size:16px;font-weight:500}
+.up-t{color:var(--rise)} .down-t{color:var(--fall)}
+.status{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;color:var(--muted)}
+.status .sep{width:1px;height:12px;background:var(--rule)}
+.btn{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:6px;padding:5px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn.primary{background:var(--accent);color:var(--sheet);border-color:var(--accent)}
+.btn.primary:hover{opacity:.9;color:var(--sheet)}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.note{font-size:13px;color:var(--muted)}
+.note.err{color:var(--hot)}
+.eod{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.eod label{font-size:13px;font-weight:700}
+.eod input{flex:1 1 220px;min-width:0;font-family:var(--mono);font-size:13px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+.eod .note{flex-basis:100%}
+
+/* 总判断 */
+.verdict{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 18px;align-items:start}
+.verdict .stamp{grid-row:span 2;width:10px;align-self:stretch;border-radius:3px;background:var(--flat)}
+.verdict[data-tone="up"] .stamp{background:var(--rise)}
+.verdict[data-tone="down"] .stamp{background:var(--fall)}
+.verdict[data-tone="caution"] .stamp{background:var(--hot)}
+.verdict[data-tone="hot"] .stamp{background:var(--hot)}
+.verdict h3{font-family:var(--display);font-size:clamp(20px,3vw,26px);font-weight:800}
+.verdict .tri{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:2px 9px;border-radius:999px;background:var(--flat-bg);color:var(--flat);font-weight:500;white-space:nowrap}
+.chip[data-tone="up"]{background:var(--rise-bg);color:var(--rise)}
+.chip[data-tone="down"]{background:var(--fall-bg);color:var(--fall)}
+.chip[data-tone="hot"]{background:var(--hot-bg);color:var(--hot)}
+.chip[data-tone="cold"]{background:var(--cold-bg);color:var(--cold)}
+.chip b{font-weight:700}
+
+/* 三张指标卡 */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card .name{font-weight:700;font-size:14px}
+.card .big{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1.1}
+.card .big small{font-size:13px;color:var(--muted);font-weight:400;margin-left:4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.meter{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cold-bg) 0 30%,var(--flat-bg) 30% 70%,var(--hot-bg) 70% 100%)}
+.meter i{position:absolute;top:-4px;width:3px;height:14px;border-radius:2px;background:var(--ink);transform:translateX(-50%)}
+.meter-l{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.meter-l.abs{display:block;position:relative;height:16px}
+.meter-l.abs span{position:absolute;transform:translateX(-50%)}
+.meter-l.abs span:first-child{transform:none}
+.meter-l.abs span:last-child{transform:translateX(-100%)}
+
+/* 图表 */
+.panel{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);padding:4px 12px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--sheet)}
+.readout{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted);min-height:20px}
+.readout b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px;background:var(--c)}
+.legend span.area::before{height:8px;background:var(--bandfill);border:1px solid var(--band)}
+#chart{width:100%;touch-action:pan-y}
+#chart svg{display:block;width:100%;height:auto}
+
+/* 解读 */
+.grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+.reads{display:flex;flex-direction:column;gap:14px}
+.read{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 14px}
+.read .lab{font-family:var(--display);font-weight:800;font-size:16px;padding-top:1px}
+.read p{max-width:62ch}
+.levels{width:100%;border-collapse:collapse;font-size:13.5px}
+.levels th{font-weight:500;color:var(--muted);text-align:left;font-size:12px;padding:4px 0;border-bottom:1px solid var(--rule)}
+.levels td{padding:6px 0;border-bottom:1px solid var(--grid)}
+.levels td.num{text-align:right}
+.levels tr.now td{font-weight:700;color:var(--accent);border-bottom-color:var(--accent)}
+.scen{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.scen .s{border-top:3px solid var(--flat);padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.scen .s[data-tone="up"]{border-top-color:var(--rise)}
+.scen .s[data-tone="down"]{border-top-color:var(--fall)}
+.scen .s h3{font-size:15px;font-weight:700}
+.scen .s p{font-size:14px}
+.analog{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat .v{font-family:var(--mono);font-size:22px;font-weight:600}
+.stat .k{font-size:12.5px;color:var(--muted)}
+.ai-out{white-space:pre-wrap;font-size:14.5px;max-width:70ch}
+.foot{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--rule);padding-top:14px}
+.foot p{max-width:90ch}
+
+@media (max-width:820px){
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .top{grid-template-columns:minmax(0,1fr)}
+  .quote{justify-content:flex-start}
+}
+</style>
+
+<div class="wrap">
+  <nav class="mkt" role="tablist" aria-label="市场">
+    <button type="button" role="tab" data-m="spx" aria-selected="true">标普500<small>美股</small></button>
+    <button type="button" role="tab" data-m="csi300" aria-selected="false">沪深300<small>A股</small></button>
+    <button type="button" role="tab" data-m="hstech" aria-selected="false">恒生科技<small>港股</small></button>
+  </nav>
+  <header class="top">
+    <div class="title">
+      <div class="eyebrow" id="eyebrow">S&amp;P 500 · 日线</div>
+      <h1 id="h1">标普500 三线读盘</h1>
+      <p class="sub">布林线 · RSI · 偏离度，最近一年</p>
+    </div>
+    <div class="quote">
+      <span class="px" id="px">—</span>
+      <span class="chg" id="chg"></span>
+    </div>
+    <div class="status">
+      <span id="asof">—</span><span class="sep"></span>
+      <span id="src">—</span><span class="sep"></span>
+      <button class="btn" id="refresh" type="button"><span id="refresh-ico" hidden class="spin"></span><span id="refresh-lbl">刷新数据</span></button>
+      <button class="btn" id="eod-toggle" type="button" aria-expanded="false" aria-controls="eod-form">EODHD 密钥：<span id="eod-state">未设置</span></button>
+      <span class="note" id="rnote"></span>
+    </div>
+    <form class="eod" id="eod-form" hidden>
+      <label for="eod-key">EODHD API 密钥</label>
+      <input id="eod-key" name="eod-key" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴你的 API 密钥">
+      <button class="btn primary" type="submit">保存</button>
+      <button class="btn" type="button" id="eod-clear" hidden>清除已保存的密钥</button>
+      <p class="note">密钥只保存在你本人可读的私有存储里，分享页面后别人看不到。刷新标普500时，先从 FRED 读取 10 年历史，再用 EODHD 补上 FRED 还没收录的最近几天，每次刷新只调用 1 次。</p>
+    </form>
+  </header>
+
+  <section class="verdict" id="verdict" data-tone="flat" aria-live="polite">
+    <div class="stamp"></div>
+    <div class="eyebrow">当前判断</div>
+    <div style="grid-column:2;display:flex;flex-direction:column;gap:10px">
+      <h3 id="v-title">—</h3>
+      <div class="tri" id="v-chips"></div>
+    </div>
+  </section>
+
+  <section class="cards" aria-label="三项指标">
+    <article class="card">
+      <div class="head"><span class="name">布林线（20, 2）</span><span class="chip" id="bb-chip">—</span></div>
+      <div class="big num" id="bb-big">—<small>%B</small></div>
+      <div class="meter" aria-hidden="true"><i id="bb-m"></i></div>
+      <div class="meter-l"><span>下轨 0</span><span>中轨 0.5</span><span>上轨 1</span></div>
+      <dl class="kv" id="bb-kv"></dl>
+    </article>
+    <article class="card">
+      <div class="head"><span class="name">RSI（14）</span><span class="chip" id="rsi-chip">—</span></div>
+      <div class="big num" id="rsi-big">—</div>
+      <div class="meter" aria-hidden="true"><i id="rsi-m"></i></div>
+      <div class="meter-l abs"><span style="left:0">0</span><span style="left:30%">30</span><span style="left:50%">50</span><span style="left:70%">70</span><span style="left:100%">100</span></div>
+      <dl class="kv" id="rsi-kv"></dl>
+    </article>
+    <article class="card">
+      <div class="head"><span class="name">偏离度（乖离率）</span><span class="chip" id="bias-chip">—</span></div>
+      <div class="big num" id="bias-big">—<small>对 20 日均线</small></div>
+      <div class="meter" aria-hidden="true"><i id="bias-m"></i></div>
+      <div class="meter-l"><span>近一年最低</span><span>中位</span><span>最高</span></div>
+      <dl class="kv" id="bias-kv"></dl>
+    </article>
+  </section>
+
+  <section class="panel" aria-label="走势图">
+    <div class="panel-head">
+      <h2>走势与指标</h2>
+      <div class="seg" role="group" aria-label="时间范围">
+        <button type="button" data-r="63" aria-pressed="false">3 个月</button>
+        <button type="button" data-r="126" aria-pressed="false">6 个月</button>
+        <button type="button" data-r="252" aria-pressed="true">1 年</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span style="--c:var(--accent)">收盘价</span>
+      <span class="area">布林带</span>
+      <span style="--c:var(--band)">20 日均线</span>
+      <span style="--c:var(--ma200)">200 日均线</span>
+    </div>
+    <div class="readout" id="readout"></div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>后市分析</h2>
+      <div class="reads">
+        <div class="read"><span class="lab">长期</span><p id="t-long">—</p></div>
+        <div class="read"><span class="lab">中期</span><p id="t-mid">—</p></div>
+        <div class="read"><span class="lab">短期</span><p id="t-short">—</p></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>关键价位</h2>
+      <div style="overflow-x:auto"><table class="levels"><thead><tr><th>价位</th><th style="text-align:right">点位</th><th style="text-align:right">距收盘</th></tr></thead><tbody id="levels"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>接下来看什么</h2>
+    <div class="scen" id="scen"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>历史上相似的读数之后</h2><span class="note" id="an-span"></span></div>
+    <p class="note" id="an-def"></p>
+    <div class="analog" id="analog"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Claude 解读</h2>
+      <button class="btn primary" id="ai-btn" type="button">根据当前读数写一段解读</button>
+    </div>
+    <p class="ai-out" id="ai-out">点按钮后，Claude 会根据上面的全部读数写一段 300 字左右的综合解读。</p>
+  </section>
+
+  <footer class="foot">
+    <p><b>计算方法</b>　布林线：20 日简单均线 ± 2 倍总体标准差，%B =（收盘 − 下轨）/（上轨 − 下轨），带宽 =（上轨 − 下轨）/ 中轨。RSI：14 日 Wilder 平滑。偏离度 =（收盘 / N 日均线 − 1）× 100%。分位数都按最近 252 个交易日计算。</p>
+    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
+    <p><b>提示</b>　技术指标基于历史价格，属于滞后指标；"历史相似读数"的样本量小且彼此重叠，只能当参考。本页不是投资建议，也不构成买卖推荐。</p>
+  </footer>
+</div>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+(() => {
+const SNAP = "__SNAP__";            // 标普500 FRED 快照
+const SNAP_EXTRA = "261029:7720.39,261030:7580.07"; // FRED 尚未收录的最近收盘（Yahoo Finance 报价）
+const SNAP_CSI = "__SNAP_CSI__";    // 沪深300 东方财富快照
+const SNAP_HST = "__SNAP_HST__";    // 恒生科技 东方财富快照
+const SNAP_SAVED = "2026-10-31";
+const HOST = "host:claude_browser";
+const { fmt } = Core;
+const $ = id => document.getElementById(id);
+
+const MKT = {
+  spx: { key: 'spx', name: '标普500', full: '美国标普500指数', eyebrow: 'S&P 500 · 日线', srcName: 'FRED', host: 'fred.stlouisfed.org',
+    url: 'https://fred.stlouisfed.org/data/SP500.txt', parse: Core.parseFredText, extra: SNAP_EXTRA,
+    rows: Core.merge(Core.parseCompact(SNAP), Core.parseCompact(SNAP_EXTRA)), source: '内置快照（FRED + 补充报价）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  csi300: { key: 'csi300', name: '沪深300', full: 'A股沪深300指数（000300）', eyebrow: 'CSI 300 · 000300 · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
+    url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
+    rows: Core.parseCompact(SNAP_CSI), source: '内置快照（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  hstech: { key: 'hstech', name: '恒生科技', full: '港股恒生科技指数（HSTECH）', eyebrow: 'Hang Seng TECH · HSTECH · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
+    url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=124.HSTECH&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
+    rows: Core.parseCompact(SNAP_HST), source: '内置快照（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+};
+const AI_HINT = '点按钮后，Claude 会根据上面的全部读数写一段 300 字左右的综合解读。';
+const state = { cur: 'spx', range: 252, ind: null, an: null };
+
+// ---------- 渲染 ----------
+function toneClass(x){ return x > 0 ? 'up-t' : x < 0 ? 'down-t' : ''; }
+function setChip(el, text, tone){ el.textContent = text; el.dataset.tone = tone; }
+function kv(el, pairs){
+  el.replaceChildren(...pairs.flatMap(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; return [dt, dd]; }));
+}
+function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
+
+function renderAll(){
+  const mk = MKT[state.cur];
+  state.ind = Core.compute(mk.rows);
+  state.an = Core.analyze(state.ind);
+  const { m } = state.an, an = state.an;
+  $('px').textContent = m.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const chg = $('chg'); chg.textContent = `${m.close - m.prev >= 0 ? '+' : ''}${(m.close - m.prev).toFixed(2)}  ${fmt.fp(m.chg, 2)}`; chg.className = 'chg ' + toneClass(m.chg);
+  $('asof').textContent = `收盘日 ${m.date}`;
+  $('src').textContent = `数据：${mk.source}，更新于 ${fmtTime(mk.updatedAt)}`;
+  $('h1').textContent = `${mk.name} 三线读盘`; $('eyebrow').textContent = mk.eyebrow;
+  $('ai-out').textContent = mk.aiText || AI_HINT; $('ai-btn').textContent = mk.aiText ? '重新生成解读' : '根据当前读数写一段解读';
+
+  const v = $('verdict'); v.dataset.tone = an.tone; $('v-title').textContent = an.verdict;
+  const lab = s => s > 0 ? ['偏多', 'up'] : s < 0 ? ['偏空', 'down'] : ['中性', 'flat'];
+  const chips = [['长期', an.longScore], ['中期', an.midScore], ['短期', an.shortScore]].map(([k, s]) => {
+    const [t, tone] = lab(s); const c = document.createElement('span'); c.className = 'chip'; c.dataset.tone = tone;
+    const b = document.createElement('b'); b.textContent = k; c.append(b, document.createTextNode(' ' + t)); return c; });
+  $('v-chips').replaceChildren(...chips);
+
+  setChip($('bb-chip'), an.bbState, an.bbTone);
+  $('bb-big').firstChild.textContent = fmt.f2(m.pb);
+  $('bb-m').style.left = (clamp(m.pb, 0, 1) * 100) + '%';
+  kv($('bb-kv'), [['上轨', fmt.fi(m.up)], ['中轨（20 日均线）', fmt.fi(m.ma20)], ['下轨', fmt.fi(m.lo)], ['带宽', `${fmt.f2(m.bw)}%（${Math.round(m.bwPct * 100)}% 分位）`]]);
+
+  setChip($('rsi-chip'), an.rsiState, an.rsiTone);
+  $('rsi-big').textContent = fmt.f1(m.rsi);
+  $('rsi-m').style.left = clamp(m.rsi, 0, 100) + '%';
+  kv($('rsi-kv'), [['5 个交易日前', fmt.f1(m.rsiPrev5)], ['背离', m.divergence === 'bear' ? '顶背离' : m.divergence === 'bull' ? '底背离' : '未见'], ['超买 / 超卖线', '70 / 30']]);
+
+  setChip($('bias-chip'), an.biasState, an.biasTone);
+  $('bias-big').firstChild.textContent = fmt.fp(m.b20, 2);
+  $('bias-m').style.left = (m.b20Pct * 100) + '%';
+  kv($('bias-kv'), [['对 50 日均线', fmt.fp(m.b50, 2)], ['对 200 日均线', `${fmt.fp(m.b200, 2)}（${Math.round(m.b200Pct * 100)}% 分位）`], ['距 52 周高点', fmt.fp(m.offHigh, 2)]]);
+
+  $('t-long').textContent = an.longTerm; $('t-mid').textContent = an.midTerm; $('t-short').textContent = an.shortTerm;
+
+  const tb = $('levels'); const rows = [...an.levels, { k: '最新收盘', v: m.close, dist: 0, now: true }].sort((a, b) => b.v - a.v);
+  tb.replaceChildren(...rows.map(l => { const tr = document.createElement('tr'); if (l.now) tr.className = 'now';
+    [l.k, fmt.fi(l.v), l.now ? '—' : fmt.fp(l.dist)].forEach((t, j) => { const td = document.createElement('td'); td.textContent = t; if (j) td.className = 'num'; tr.append(td); });
+    if (!l.now) tr.lastChild.classList.add(l.dist > 0 ? 'up-t' : 'down-t'); return tr; }));
+
+  $('scen').replaceChildren(...an.scenarios.map(s => { const d = document.createElement('div'); d.className = 's'; d.dataset.tone = s.tone;
+    const h = document.createElement('h3'); h.textContent = s.title; const p = document.createElement('p'); p.textContent = s.text; d.append(h, p); return d; }));
+
+  const a = an.analog;
+  $('an-def').textContent = `条件：价格在 200 日均线${m.close > m.ma200 ? '上方' : '下方'}，RSI 在 ${fmt.f1(m.rsi - 5)}–${fmt.f1(m.rsi + 5)} 之间，%B 在 ${fmt.f2(m.pb - 0.2)}–${fmt.f2(m.pb + 0.2)} 之间。统计这些交易日之后 5 天和 20 天的涨跌。`;
+  $('an-span').textContent = `样本区间 ${a.span[0]} 至 ${a.span[1]}`;
+  const stats = a.n ? [
+    [`${a.n} 天 / ${a.episodes} 段`, '符合条件的交易日'],
+    [fmt.fp(a.f5.median, 2), `之后 5 日中位涨跌，上涨占 ${Math.round(a.f5.win * 100)}%`],
+    [fmt.fp(a.f20.median, 2), `之后 20 日中位涨跌，上涨占 ${Math.round(a.f20.win * 100)}%`],
+    [`${fmt.fp(a.f20.p10, 1)} ~ ${fmt.fp(a.f20.p90, 1)}`, '20 日涨跌的 10%–90% 区间'],
+  ] : [['0', '样本期内没有足够相似的读数']];
+  $('analog').replaceChildren(...stats.map(([v, k]) => { const d = document.createElement('div'); d.className = 'stat';
+    const vv = document.createElement('span'); vv.className = 'v'; vv.textContent = v; const kk = document.createElement('span'); kk.className = 'k'; kk.textContent = k; d.append(vv, kk); return d; }));
+  if (a.n && a.n < 30) $('an-def').textContent += ` 样本只有 ${a.episodes} 段行情，结论的统计意义有限。`;
+
+  renderChart();
+}
+function fmtTime(s){ if (!s) return '—'; const d = new Date(s); if (isNaN(d)) return s; return s.length <= 10 ? s : d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+
+// ---------- 图表（手写 SVG，三层共用时间轴） ----------
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; }
+function renderChart(){
+  const ind = state.ind, N = ind.c.length, s = Math.max(0, N - state.range), idx = [];
+  for (let i = s; i < N; i++) idx.push(i);
+  const box = $('chart'); const W = Math.max(320, box.clientWidth || 800);
+  const narrow = W < 560, R = narrow ? 44 : 56, L = 4, Hp = narrow ? 220 : 280, Hr = 96, Hb = 104, G = 22, top = 8;
+  const H = top + Hp + G + Hr + G + Hb + 22;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '收盘价、布林带、200 日均线、RSI 与偏离度走势图' });
+  const x = i => L + (i - s) / Math.max(1, idx.length - 1) * (W - L - R);
+  const css = n => `var(--${n})`;
+  function panel(y0, h, lo, hi, ticks, fmtT){
+    const y = v => y0 + (hi - v) / (hi - lo) * h;
+    ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: css('grid'), 'stroke-width': 1 }, svg);
+      const tx = el('text', { x: W - R + 6, y: y(t) + 4, 'font-size': 11, fill: css('muted'), 'font-family': 'IBM Plex Mono, monospace' }, svg); tx.textContent = fmtT(t); });
+    return y;
+  }
+  function niceTicks(lo, hi, n){ const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)); const step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => span / k <= n) || mag * 10;
+    const out = []; for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) out.push(+t.toFixed(6)); return out; }
+  function path(arr, y){ let d = '', pen = false; idx.forEach(i => { const v = arr[i]; if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; }); return d; }
+
+  // 价格层
+  const vals = idx.flatMap(i => [ind.c[i], ind.up[i], ind.lo[i], ind.ma200[i]]).filter(v => v != null);
+  let pLo = Math.min(...vals), pHi = Math.max(...vals); const pad = (pHi - pLo) * 0.06; pLo -= pad; pHi += pad;
+  const yP = panel(top, Hp, pLo, pHi, niceTicks(pLo, pHi, 5), t => Math.round(t).toLocaleString('en-US'));
+  let band = ''; const bi = idx.filter(i => ind.up[i] != null);
+  if (bi.length) { band = 'M' + bi.map(i => x(i).toFixed(1) + ' ' + yP(ind.up[i]).toFixed(1)).join('L') + 'L' + bi.slice().reverse().map(i => x(i).toFixed(1) + ' ' + yP(ind.lo[i]).toFixed(1)).join('L') + 'Z';
+    el('path', { d: band, fill: css('bandfill'), stroke: 'none' }, svg); }
+  el('path', { d: path(ind.up, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1 }, svg);
+  el('path', { d: path(ind.lo, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1 }, svg);
+  el('path', { d: path(ind.ma20, yP), fill: 'none', stroke: css('band'), 'stroke-width': 1, 'stroke-dasharray': '4 3' }, svg);
+  el('path', { d: path(ind.ma200, yP), fill: 'none', stroke: css('ma200'), 'stroke-width': 1.6 }, svg);
+  el('path', { d: path(ind.c, yP), fill: 'none', stroke: css('accent'), 'stroke-width': 1.8, 'stroke-linejoin': 'round' }, svg);
+  el('circle', { cx: x(N - 1), cy: yP(ind.c[N - 1]), r: 3.5, fill: css('accent'), stroke: css('sheet'), 'stroke-width': 1.5 }, svg);
+
+  // RSI 层
+  const y1 = top + Hp + G;
+  const lab1 = el('text', { x: L + 2, y: y1 - 6, 'font-size': 11.5, fill: css('muted'), 'font-weight': 500 }, svg); lab1.textContent = 'RSI(14)';
+  const yR = panel(y1, Hr, 0, 100, [30, 50, 70], t => String(t));
+  el('rect', { x: L, width: W - L - R, y: yR(100), height: yR(70) - yR(100), fill: css('hot-bg'), opacity: .55 }, svg);
+  el('rect', { x: L, width: W - L - R, y: yR(30), height: yR(0) - yR(30), fill: css('cold-bg'), opacity: .55 }, svg);
+  el('path', { d: path(ind.rsi, yR), fill: 'none', stroke: css('ink'), 'stroke-width': 1.3 }, svg);
+
+  // 偏离度层
+  const y2 = y1 + Hr + G;
+  const lab2 = el('text', { x: L + 2, y: y2 - 6, 'font-size': 11.5, fill: css('muted'), 'font-weight': 500 }, svg); lab2.textContent = '偏离度 %（20 日 / 200 日）';
+  const bv = idx.flatMap(i => [ind.b20[i], ind.b200[i]]).filter(v => v != null);
+  let bLo = Math.min(0, ...bv), bHi = Math.max(0, ...bv); const bp = (bHi - bLo) * 0.08 || 1; bLo -= bp; bHi += bp;
+  const yB = panel(y2, Hb, bLo, bHi, niceTicks(bLo, bHi, 4), t => (t > 0 ? '+' : '') + t);
+  el('line', { x1: L, x2: W - R, y1: yB(0), y2: yB(0), stroke: css('muted'), 'stroke-width': 1 }, svg);
+  const bw = Math.max(1, (W - L - R) / idx.length * 0.7);
+  idx.forEach(i => { const v = ind.b20[i]; if (v == null) return; el('rect', { x: x(i) - bw / 2, width: bw, y: Math.min(yB(0), yB(v)), height: Math.abs(yB(v) - yB(0)), fill: v >= 0 ? css('rise') : css('fall'), opacity: .55 }, svg); });
+  el('path', { d: path(ind.b200, yB), fill: 'none', stroke: css('ma200'), 'stroke-width': 1.5 }, svg);
+
+  // x 轴月份
+  let lastM = ''; idx.forEach(i => { const mth = ind.rows[i].d.slice(0, 7); if (mth !== lastM) { lastM = mth;
+    if (x(i) > W - R - 30) return; const step = state.range > 130 ? 2 : 1; if (+mth.slice(5) % step) return;
+    const t = el('text', { x: x(i), y: H - 6, 'font-size': 11, fill: css('muted'), 'font-family': 'IBM Plex Mono, monospace' }, svg); t.textContent = mth.slice(2).replace('-', '/'); } });
+
+  // 悬停十字线
+  const cross = el('line', { y1: top, y2: H - 20, stroke: css('muted'), 'stroke-width': 1, 'stroke-dasharray': '2 3', visibility: 'hidden' }, svg);
+  const dot = el('circle', { r: 3.5, fill: css('sheet'), stroke: css('accent'), 'stroke-width': 2, visibility: 'hidden' }, svg);
+  const hit = el('rect', { x: L, y: 0, width: W - L - R, height: H, fill: 'transparent' }, svg);
+  function show(i){
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', x(i)); dot.setAttribute('cy', yP(ind.c[i])); dot.setAttribute('visibility', 'visible');
+    readout(i);
+  }
+  function hide(){ cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); readout(N - 1); }
+  hit.addEventListener('pointermove', e => { const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width * W;
+    const i = clamp(Math.round(s + (px - L) / (W - L - R) * (idx.length - 1)), s, N - 1); show(i); });
+  hit.addEventListener('pointerleave', hide);
+  box.replaceChildren(svg); readout(N - 1);
+}
+function readout(i){
+  const ind = state.ind, ro = $('readout');
+  const items = [['日期', ind.rows[i].d], ['收盘', fmt.fi(ind.c[i])], ['%B', fmt.f2(ind.pb[i])], ['RSI', fmt.f1(ind.rsi[i])], ['对 20 日', fmt.fp(ind.b20[i], 2)], ['对 200 日', fmt.fp(ind.b200[i], 2)]];
+  ro.replaceChildren(...items.map(([k, v]) => { const sp = document.createElement('span'); const b = document.createElement('b'); b.textContent = v; sp.append(k + ' ', b); return sp; }));
+}
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  state.range = +b.dataset.r; document.querySelectorAll('.seg button').forEach(o => o.setAttribute('aria-pressed', String(o === b))); renderChart(); }));
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderChart, 150); });
+
+// ---------- 数据存储（db）与刷新（内置浏览器读取数据源） ----------
+const use = async n => { try { return window.claude && window.claude.use ? await window.claude.use(n) : null; } catch (e) { return null; } };
+let db = null, busy = null;
+function note(t, err){ const n = $('rnote'); n.textContent = t || ''; n.classList.toggle('err', !!err); }
+function syncBusy(){
+  const b = busy === state.cur, mk = MKT[state.cur];
+  $('refresh').disabled = !!busy; $('refresh-ico').hidden = !busy;
+  $('refresh-lbl').textContent = busy ? `正在读取${MKT[busy].srcName}…` : '刷新数据';
+}
+
+function applyStored(key, d){
+  const mk = MKT[key];
+  if (!d || typeof d.rows !== 'string') return false;
+  const rows = Core.parseCompact(d.rows); if (rows.length < 260) return false;
+  const merged = Core.merge(rows, Core.parseCompact(mk.extra));
+  if (merged[merged.length - 1].d < mk.rows[mk.rows.length - 1].d && rows.length < mk.rows.length) return false;
+  mk.rows = merged; mk.source = d.source || mk.srcName; mk.updatedAt = d.updatedAt || ''; mk.stored = true;
+  if (key === state.cur) renderAll(); return true;
+}
+
+function textOf(res){ return (res?.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n'); }
+let tabId = null;
+// 这些错误说明内置浏览器整体不可用，不必再试下一个数据源
+const FATAL = new Set(['server_not_connected', 'not_in_manifest', 'not_granted', 'consent_required', 'cancelled']);
+async function fetchText(mcp, url){
+  if (tabId) { try { await mcp.callTool(HOST, 'navigate', { url, tabId }); } catch (e) { if (FATAL.has(e && e.code)) throw e; tabId = null; } }
+  if (!tabId) {
+    const res = await mcp.callTool(HOST, 'preview_start', { url });
+    const m = textOf(res).match(/tabId\s+([\w-]+)/); tabId = m ? m[1] : null;
+  }
+  const page = await mcp.callTool(HOST, 'get_page_text', tabId ? { tabId, max_chars: 200000 } : { max_chars: 200000 });
+  return textOf(page);
+}
+function addDays(d, n){ const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+function eodProblem(t){
+  if (/limit|exceeded/i.test(t)) return 'EODHD 今天的调用次数已用完，明天会恢复';
+  if (/unauth|invalid|forbidden|wrong|denied|token/i.test(t)) return 'EODHD 密钥无效，请检查后重新保存';
+  return 'EODHD 没有返回数据';
+}
+async function refresh(key, auto){
+  if (busy) return;
+  const mk = MKT[key];
+  const mcp = await use('mcp');
+  if (!mcp) { if (!auto) note('自动抓取需要在 Claude 桌面应用中打开本页（由应用内置浏览器读取数据）。当前显示的是已保存的数据。', true); return; }
+  busy = key; syncBusy(); if (!auto) note('');
+  try {
+    const prevLast = mk.rows[mk.rows.length - 1].d;
+    // 1) 长历史：FRED / 东方财富
+    let base = null, baseErr = null;
+    try {
+      base = mk.parse(await fetchText(mcp, mk.url));
+      if (base.length < 300) { baseErr = { code: 'parse', message: `${mk.srcName}页面只读到 ${base.length} 行数据，可能页面没加载完或格式变了` }; base = null; }
+    } catch (e) { if (FATAL.has(e && e.code)) throw e; baseErr = e; }
+    // 2) 最近几天：EODHD（仅标普500，且已保存密钥）
+    let fresh = [], eodMsg = '';
+    if (key === 'spx' && eodKey) {
+      const from = addDays((base || mk.rows)[(base || mk.rows).length - 1].d, -10);
+      $('refresh-lbl').textContent = '正在读取 EODHD…';
+      try {
+        const t = await fetchText(mcp, `https://eodhd.com/api/eod/GSPC.INDX?api_token=${encodeURIComponent(eodKey)}&fmt=json&from=${from}`);
+        fresh = Core.parseEodhd(t); if (!fresh.length) eodMsg = eodProblem(t);
+      } catch (e) {
+        if (FATAL.has(e && e.code)) throw e;
+        eodMsg = e && e.code === 'approval_required' ? '需要先在桌面应用里允许内置浏览器访问 eodhd.com' : 'EODHD 读取失败';
+      }
+    }
+    if (!base && !fresh.length) throw baseErr || { message: eodMsg };
+    const rows = Core.merge(base || mk.rows, fresh.length ? fresh : Core.parseCompact(mk.extra));
+    mk.rows = rows;
+    mk.source = base && fresh.length ? `${mk.srcName} + EODHD（已刷新）` : base ? `${mk.srcName}（已刷新）` : '已保存数据 + EODHD（已刷新）';
+    mk.updatedAt = new Date().toISOString();
+    if (key === state.cur) renderAll();
+    const newLast = rows[rows.length - 1].d;
+    const parts = [newLast > prevLast ? `已更新到 ${newLast}` : `最新数据为 ${newLast}，没有更新的交易日`];
+    if (!base) parts.push(`${mk.srcName}读取失败（${(baseErr && baseErr.message) || '未知原因'}），历史部分沿用已保存的数据`);
+    if (eodMsg) parts.push(eodMsg);
+    note(`${mk.name}：${parts.join('；')}。`, !base || !!eodMsg);
+    try { localStorage.setItem('last-try-' + key, String(Date.now())); } catch (e) {}
+    if (mk.doc) {
+      try { await mk.doc.set({ rows: Core.toCompact(rows), updatedAt: mk.updatedAt, source: mk.source, last: newLast }); mk.stored = true; }
+      catch (e) { note(`${mk.name}：数据已刷新，但没能保存到页面存储，下次打开会重新读取。`); }
+    }
+  } catch (e) {
+    const code = e && e.code;
+    const msg = code === 'server_not_connected' || code === 'not_in_manifest' ? '内置浏览器不可用：请在 Claude 桌面应用中打开本页。'
+      : code === 'not_granted' || code === 'consent_required' ? '没有获得使用内置浏览器的许可，可在本页的权限菜单里重新开启。'
+      : code === 'cancelled' ? '读取被取消。'
+      : code === 'approval_required' ? `需要先在桌面应用里允许内置浏览器访问 ${mk.host}。`
+      : (e && e.message) ? '刷新失败：' + e.message : '刷新失败，请稍后再试。';
+    if (!auto || (code !== 'not_granted' && code !== 'server_not_connected')) note(`${mk.name}：${msg}`, true);
+    if (code === 'not_granted' || code === 'server_not_connected') queue.length = 0;
+  } finally { busy = null; syncBusy(); runQueue(); }
+}
+// 自动刷新按顺序排队，同一时间只用一个浏览器标签页
+const queue = [];
+function enqueue(key){ if (!queue.includes(key)) queue.push(key); runQueue(); }
+function runQueue(){ if (busy || !queue.length) return; const k = queue.shift(); try { localStorage.setItem('last-try-' + k, String(Date.now())); } catch (e) {} refresh(k, true); }
+$('refresh').addEventListener('click', () => refresh(state.cur, false));
+
+// 数据过期判断：距上次更新超过 12 小时，且距上次自动尝试超过 6 小时
+function stale(key){
+  const mk = MKT[key];
+  const u = Date.parse(mk.updatedAt); const age = isNaN(u) ? Infinity : Date.now() - u;
+  let lastTry = 0; try { lastTry = +localStorage.getItem('last-try-' + key) || 0; } catch (e) {}
+  return age > 12 * 3600e3 && Date.now() - lastTry > 6 * 3600e3;
+}
+function watch(key){
+  const mk = MKT[key]; let decided = false;
+  const decide = needed => { if (decided) return; decided = true; if (needed || stale(key)) enqueue(key); };
+  mk.doc = db.doc('series/' + key);
+  const timer = setTimeout(() => { note('页面存储暂时连不上，先显示内置快照。'); decide(false); }, 10000);
+  mk.doc.onSnapshot(snap => {
+    if (snap.metadata && snap.metadata.fromCache) { if (snap.exists) applyStored(key, snap.data()); return; }
+    clearTimeout(timer); const had = snap.exists && applyStored(key, snap.data());
+    decide(!had);
+  }, () => { clearTimeout(timer); decide(false); });
+}
+
+// ---------- EODHD 密钥（存在本人私有的 data/users/<id>/ 下） ----------
+let eodKey = '', keyDoc = null;
+function eodUI(){
+  const onSpx = state.cur === 'spx';
+  $('eod-toggle').hidden = !onSpx; if (!onSpx) { $('eod-form').hidden = true; $('eod-toggle').setAttribute('aria-expanded', 'false'); }
+  $('eod-state').textContent = !keyDoc ? '不可用' : eodKey ? '已设置' : '未设置';
+  $('eod-clear').hidden = !eodKey;
+}
+$('eod-toggle').addEventListener('click', () => {
+  const f = $('eod-form'); f.hidden = !f.hidden; $('eod-toggle').setAttribute('aria-expanded', String(!f.hidden));
+  if (!f.hidden) { if (!keyDoc) note('保存密钥需要登录 claude.ai 打开本页。', true); else $('eod-key').focus(); }
+});
+$('eod-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!keyDoc) { note('保存密钥需要登录 claude.ai 打开本页。', true); return; }
+  const v = $('eod-key').value.trim();
+  if (!v) { note('请先粘贴 EODHD 密钥。', true); return; }
+  if (!/^[A-Za-z0-9._-]{6,}$/.test(v)) { note('这串密钥里有空格或特殊字符，请确认复制的是完整的 API 密钥。', true); return; }
+  try {
+    await keyDoc.set({ key: v, savedAt: new Date().toISOString() });
+    eodKey = v; $('eod-key').value = ''; $('eod-form').hidden = true; $('eod-toggle').setAttribute('aria-expanded', 'false'); eodUI();
+    note('EODHD 密钥已保存。点"刷新数据"就会用它补上最近几天。');
+  } catch (err) { note('密钥没能保存，请稍后再试。', true); }
+});
+$('eod-clear').addEventListener('click', async () => {
+  if (!keyDoc) return;
+  try { await keyDoc.delete(); eodKey = ''; eodUI(); note('已清除保存的 EODHD 密钥。'); }
+  catch (err) { note('没能清除密钥，请稍后再试。', true); }
+});
+async function loadKey(){
+  const user = await use('user'); const uid = user ? await user.id().catch(() => null) : null;
+  if (!db || !uid) { eodUI(); return; }
+  keyDoc = db.collection('data/users/' + uid).doc('eodhd');
+  await new Promise(resolve => {
+    const t = setTimeout(resolve, 4000);
+    keyDoc.onSnapshot(s => {
+      eodKey = s.exists ? String((s.data() || {}).key || '') : ''; eodUI();
+      if (!s.metadata || !s.metadata.fromCache) { clearTimeout(t); resolve(); }
+    }, () => { clearTimeout(t); eodUI(); resolve(); });
+  });
+}
+
+// ---------- 市场切换 ----------
+function selectMarket(key, fromHash){
+  if (!MKT[key]) key = 'spx';
+  state.cur = key; note('');
+  document.querySelectorAll('.mkt button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.m === key)));
+  if (!fromHash && location.hash !== '#' + key) { try { history.replaceState(null, '', '#' + key); } catch (e) { location.hash = key; } }
+  renderAll(); syncBusy(); eodUI();
+}
+document.querySelectorAll('.mkt button').forEach(b => b.addEventListener('click', () => selectMarket(b.dataset.m)));
+window.addEventListener('hashchange', () => selectMarket(location.hash.slice(1), true));
+
+async function boot(){
+  selectMarket(location.hash.slice(1), true);
+  db = await use('db');
+  await loadKey();
+  if (db) { watch(state.cur); Object.keys(MKT).filter(k => k !== state.cur).forEach(watch); }
+  else { if (stale(state.cur)) enqueue(state.cur); }
+}
+
+// ---------- Claude 解读 ----------
+let aiCtl = null;
+$('ai-btn').addEventListener('click', async () => {
+  const out = $('ai-out'), btn = $('ai-btn');
+  const sample = await use('sample');
+  if (!sample) { out.textContent = '当前环境用不了 Claude 解读（需要登录 claude.ai 打开本页）。上面的规则化分析不受影响。'; return; }
+  if (aiCtl) aiCtl.abort(); aiCtl = new AbortController();
+  btn.disabled = true; btn.textContent = '正在写…'; out.textContent = 'Claude 正在阅读读数…';
+  const key = state.cur, mk = MKT[key];
+  const { m, analog } = state.an, r = x => x == null ? null : +x.toFixed(2);
+  const data = { 收盘日: m.date, 收盘: r(m.close), 日涨跌pct: r(m.chg), 布林上轨: r(m.up), 中轨MA20: r(m.ma20), 布林下轨: r(m.lo), pctB: r(m.pb),
+    带宽pct: r(m.bw), 带宽一年分位: r(m.bwPct), 近期是否收口后突破: m.recentSqueeze && (m.pb > 1 || m.pb < 0), RSI14: r(m.rsi), RSI五日前: r(m.rsiPrev5), 背离: m.divergence,
+    MA50: r(m.ma50), MA100: r(m.ma100), MA200: r(m.ma200), MA200近20日斜率pct: r(m.ma200Slope), 偏离MA20pct: r(m.b20), 偏离MA20一年分位: r(m.b20Pct), 偏离MA50pct: r(m.b50),
+    偏离MA200pct: r(m.b200), 距52周高点pct: r(m.offHigh), 跌破或站上MA100天数: m.x100, 规则判断: state.an.verdict,
+    历史相似: analog.n ? { 交易日数: analog.n, 行情段数: analog.episodes, 五日中位pct: r(analog.f5.median), 五日上涨比例: r(analog.f5.win), 二十日中位pct: r(analog.f20.median), 二十日上涨比例: r(analog.f20.win) } : '无' };
+  const prompt = `你是一位克制、严谨的市场技术分析师。下面是${mk.full}最新的技术指标读数（JSON）。\n\n${JSON.stringify(data)}\n\n请用简体中文写一段约 300 字的后市解读，分三小段：1) 三个指标合起来说明了什么；2) 接下来几周最关键的观察点和价位；3) 这些指标的局限（例如滞后、超卖可以持续、历史样本小）。要求：只依据给出的数字，不编造新闻或基本面；不要给出买入或卖出建议；用纯文本，不要 Markdown 标记。`;
+  try {
+    const res = await sample(prompt, { signal: aiCtl.signal, modelTier: 'default', cache: false, onText: u => { mk.aiText = u.text; if (state.cur === key) out.textContent = u.text; } });
+    mk.aiText = res.text;
+  } catch (e) {
+    if (e && e.code === 'not_granted') out.textContent = '没有获得调用 Claude 的许可。';
+    else if (e && e.code === 'rate_limited') out.textContent = '调用太频繁了，请过一会儿再试。';
+    else if (!(e && e.code === 'cancelled')) out.textContent = (e && e.text) || '解读没能生成，请稍后再试。';
+  } finally { btn.disabled = false; btn.textContent = MKT[state.cur].aiText ? '重新生成解读' : '根据当前读数写一段解读'; }
+});
+
+boot();
+})();
+</script>
