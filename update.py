@@ -83,10 +83,12 @@ def update_spx():
     except Exception as e:
         # 不打印异常原文，避免把带密钥的网址写进日志
         return f'标普500：EODHD 读取失败（{type(e).__name__}），沿用原数据'
+    if not isinstance(data, list) or not data:
+        return '标普500：EODHD 没有返回数据（可能是密钥无效或额度用完），沿用原数据'
     fresh = {r['date']: float(r['close']) for r in data if r.get('close')}
     added = {d: c for d, c in fresh.items() if d > last}
     if not added:
-        return f'标普500：没有新交易日（最新 {last}）'
+        return f'标普500：没有新交易日（EODHD 读到 {len(fresh)} 天，最新 {max(fresh)}）'
     old.update(added)
     save('snap.txt', old)
     return f'标普500：{last} → {max(old)}'
