@@ -39,7 +39,13 @@ const Core = (() => {
     const re = /"d"\s*:\s*"(\d{4}-\d{2}-\d{2})"\s*,\s*"f"\s*:\s*"(\d+(?:\.\d+)?)"/g;
     let m;
     while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
-    return out.filter(r => r.c > 0).sort((a, b) => a.d < b.d ? -1 : 1);
+    return cleanFq(out);
+  }
+  // 复权因子只留 2010 年以后、不晚于今天的，并按日期排序。
+  // 快照日期是两位年份（yymmdd），1999 年的因子存进去再读出来会变成 2099 年，必须先去掉
+  function cleanFq(fq) {
+    const today = new Date().toISOString().slice(0, 10);
+    return fq.filter(r => r.c > 0 && r.d >= '2010-01-01' && r.d <= today).sort((a, b) => a.d < b.d ? -1 : 1);
   }
   // 去掉单日涨跌超过 maxJump 的异常行（数据源偶尔会把别的代码的行情混进来）
   function dropJumps(rows, maxJump) {
@@ -49,7 +55,8 @@ const Core = (() => {
   }
   // 原始收盘价 ÷ 前复权因子 = 前复权价（按比例复权，涨跌幅不失真）
   function applyFq(rows, fq) {
-    if (!fq || !fq.length) return rows;
+    fq = cleanFq(fq || []);
+    if (!fq.length) return rows;
     let j = 0, f = fq[0].c;
     return rows.map(r => {
       while (j < fq.length && fq[j].d <= r.d) { f = fq[j].c; j++; }
@@ -280,6 +287,6 @@ const Core = (() => {
       rsiState, rsiTone, bbState, bbTone, biasState, biasTone, levels, scenarios, analog };
   }
 
-  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseTencent, parseSinaFq, applyFq, dropJumps, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
+  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseTencent, parseSinaFq, cleanFq, applyFq, dropJumps, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
 })();
 if (typeof module !== 'undefined') module.exports = Core;

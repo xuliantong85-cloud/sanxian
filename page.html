@@ -485,7 +485,7 @@ function applyStored(key, d){
   const merged = Core.merge(rows, Core.parseCompact(mk.extra));
   if (merged[merged.length - 1].d < mk.rows[mk.rows.length - 1].d && rows.length < mk.rows.length) return false;
   mk.rows = merged; mk.source = d.source || mk.srcName; mk.updatedAt = d.updatedAt || ''; mk.stored = true;
-  if (mk.fq && typeof d.fq === 'string') { const f = Core.parseCompact(d.fq); if (f.length) mk.fq = f; }
+  if (mk.fq && typeof d.fq === 'string') { const f = Core.cleanFq(Core.parseCompact(d.fq)); if (f.length) mk.fq = f; }
   if (key === state.cur) renderAll(); return true;
 }
 
