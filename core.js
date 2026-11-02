@@ -33,6 +33,29 @@ const Core = (() => {
     while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
     return out.filter(r => r.c > 0);
   }
+  // 新浪前复权因子：[{"d":"2026-07-16", "f":"1.0000"}, ...]，某日的因子是不晚于该日的最近一条
+  function parseSinaFq(t) {
+    const out = [];
+    const re = /"d"\s*:\s*"(\d{4}-\d{2}-\d{2})"\s*,\s*"f"\s*:\s*"(\d+(?:\.\d+)?)"/g;
+    let m;
+    while ((m = re.exec(t))) out.push({ d: m[1], c: +m[2] });
+    return out.filter(r => r.c > 0).sort((a, b) => a.d < b.d ? -1 : 1);
+  }
+  // 去掉单日涨跌超过 maxJump 的异常行（数据源偶尔会把别的代码的行情混进来）
+  function dropJumps(rows, maxJump) {
+    const out = [];
+    rows.forEach(r => { const p = out[out.length - 1]; if (!p || Math.abs(r.c / p.c - 1) <= maxJump) out.push(r); });
+    return out;
+  }
+  // 原始收盘价 ÷ 前复权因子 = 前复权价（按比例复权，涨跌幅不失真）
+  function applyFq(rows, fq) {
+    if (!fq || !fq.length) return rows;
+    let j = 0, f = fq[0].c;
+    return rows.map(r => {
+      while (j < fq.length && fq[j].d <= r.d) { f = fq[j].c; j++; }
+      return { d: r.d, c: r.c / f };
+    });
+  }
   // EODHD 日线 JSON：[{"date":"2026-10-30",...,"close":7580.07,...}]
   function parseEodhd(t) {
     const out = [];
@@ -100,7 +123,8 @@ const Core = (() => {
   const f1 = x => x == null ? '—' : x.toFixed(1);
   const f2 = x => x == null ? '—' : x.toFixed(2);
   const fp = (x, d = 1) => x == null ? '—' : (x > 0 ? '+' : '') + x.toFixed(d) + '%';
-  const fi = x => x == null ? '—' : Math.round(x).toLocaleString('en-US');
+  // 价位：指数取整数，个股等低价品种保留两位小数
+  const fi = x => x == null ? '—' : Math.abs(x) < 1000 ? x.toFixed(2) : Math.round(x).toLocaleString('en-US');
 
   function analyze(ind) {
     const n = ind.c.length, i = n - 1, c = ind.c[i];
@@ -256,6 +280,6 @@ const Core = (() => {
       rsiState, rsiTone, bbState, bbTone, biasState, biasTone, levels, scenarios, analog };
   }
 
-  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseTencent, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
+  return { parseCompact, toCompact, parseFredText, parseEastmoney, parseTencent, parseSinaFq, applyFq, dropJumps, parseEodhd, merge, compute, analyze, fmt: { f1, f2, fp, fi } };
 })();
 if (typeof module !== 'undefined') module.exports = Core;

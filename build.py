@@ -18,6 +18,8 @@ def main():
           .replace('__SNAP_CSI__', (D / 'snap_csi300.txt').read_text().strip())
           .replace('__SNAP_HST__', (D / 'snap_hstech.txt').read_text().strip())
           .replace('__SNAP_NDX__', (D / 'snap_ndx.txt').read_text().strip())
+          .replace('__SNAP_SPDB_FQ__', (D / 'fq_spdb.txt').read_text().strip())
+          .replace('__SNAP_SPDB__', (D / 'snap_spdb.txt').read_text().strip())
           .replace('__SNAP__', (D / 'snap.txt').read_text().strip()))
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     s = re.sub(r'const SNAP_SAVED = "[^"]*";', f'const SNAP_SAVED = "{today}";', s)

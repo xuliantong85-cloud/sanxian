@@ -154,6 +154,7 @@ button{font:inherit;cursor:pointer}
     <button type="button" role="tab" data-m="ndx" aria-selected="false">纳指100<small>美股</small></button>
     <button type="button" role="tab" data-m="csi300" aria-selected="false">沪深300<small>A股</small></button>
     <button type="button" role="tab" data-m="hstech" aria-selected="false">恒生科技<small>港股</small></button>
+    <button type="button" role="tab" data-m="spdb" aria-selected="false">浦发银行<small>600000</small></button>
   </nav>
   <header class="top">
     <div class="title">
@@ -269,7 +270,7 @@ button{font:inherit;cursor:pointer}
 
   <footer class="foot">
     <p><b>计算方法</b>　布林线：20 日简单均线 ± 2 倍总体标准差，%B =（收盘 − 下轨）/（上轨 − 下轨），带宽 =（上轨 − 下轨）/ 中轨。RSI：14 日 Wilder 平滑。偏离度 =（收盘 / N 日均线 − 1）× 100%。分位数都按最近 252 个交易日计算。</p>
-    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。纳斯达克100（NDX）来自腾讯行情的日 K 线收盘价。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
+    <p><b>数据</b>　标普500 的历史来自圣路易斯联储 FRED 的 SP500 序列（通常比交易所晚 1 个交易日）；保存了 EODHD 密钥后，刷新时用 EODHD 的 GSPC.INDX 日线补上最近几天。纳斯达克100（NDX）来自腾讯行情的日 K 线收盘价。浦发银行（600000）用腾讯行情的不复权收盘价，再按新浪财经的前复权因子按比例换算成前复权价，避免分红除息造成的价格跳空。沪深300（000300）和恒生科技指数（HSTECH）来自东方财富的日 K 线收盘价，收盘后即可更新。各个市场的数据分开保存、分开刷新。自动刷新需要在 Claude 桌面应用里打开本页，通过应用内置浏览器读取数据源。</p>
     <p><b>提示</b>　技术指标基于历史价格，属于滞后指标；"历史相似读数"的样本量小且彼此重叠，只能当参考。本页不是投资建议，也不构成买卖推荐。</p>
   </footer>
 </div>
@@ -284,6 +285,8 @@ const SNAP_EXTRA = "261029:7720.39,261030:7580.07"; // FRED 尚未收录的最�
 const SNAP_CSI = "__SNAP_CSI__";    // 沪深300 东方财富快照
 const SNAP_HST = "__SNAP_HST__";    // 恒生科技 东方财富快照
 const SNAP_NDX = "__SNAP_NDX__";    // 纳斯达克100 腾讯行情快照
+const SNAP_SPDB = "__SNAP_SPDB__";  // 浦发银行 不复权收盘价（腾讯行情）
+const SNAP_SPDB_FQ = "__SNAP_SPDB_FQ__"; // 浦发银行 前复权因子（新浪财经）
 const SNAP_SAVED = "2026-10-31";
 const HOST = "host:claude_browser";
 const { fmt } = Core;
@@ -303,6 +306,11 @@ const MKT = {
   hstech: { key: 'hstech', name: '恒生科技', full: '港股恒生科技指数（HSTECH）', eyebrow: 'Hang Seng TECH · HSTECH · 日线', srcName: '东方财富', host: 'push2his.eastmoney.com',
     url: 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=124.HSTECH&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=2600', parse: Core.parseEastmoney, extra: '',
     rows: Core.parseCompact(SNAP_HST), source: '内置快照（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
+  // 个股：rows 存不复权收盘价，计算前用 fq（前复权因子）按比例换算；分红除息后刷新因子即可
+  spdb: { key: 'spdb', name: '浦发银行', full: '浦发银行（600000.SH）股价，前复权', eyebrow: 'SPDB · 600000.SH · 日线 · 前复权', srcName: '腾讯行情', host: 'web.ifzq.gtimg.cn',
+    url: 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600000,day,,,640,', parse: Core.parseTencent, extra: '', append: true, maxJump: 0.5,
+    fqUrl: 'https://finance.sina.com.cn/realstock/company/sh600000/qfq.js', fq: Core.parseCompact(SNAP_SPDB_FQ),
+    rows: Core.parseCompact(SNAP_SPDB), source: '内置快照（腾讯行情）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
 };
 const AI_HINT = '点按钮后，Claude 会根据上面的全部读数写一段 300 字左右的综合解读。';
 const state = { cur: 'spx', range: 252, ind: null, an: null };
@@ -317,7 +325,7 @@ function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
 
 function renderAll(){
   const mk = MKT[state.cur];
-  state.ind = Core.compute(mk.rows);
+  state.ind = Core.compute(mk.fq ? Core.applyFq(mk.rows, mk.fq) : mk.rows);
   state.an = Core.analyze(state.ind);
   const { m } = state.an, an = state.an;
   $('px').textContent = m.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -401,7 +409,7 @@ function renderChart(){
   // 价格层
   const vals = idx.flatMap(i => [ind.c[i], ind.up[i], ind.lo[i], ind.ma200[i]]).filter(v => v != null);
   let pLo = Math.min(...vals), pHi = Math.max(...vals); const pad = (pHi - pLo) * 0.06; pLo -= pad; pHi += pad;
-  const yP = panel(top, Hp, pLo, pHi, niceTicks(pLo, pHi, 5), t => Math.round(t).toLocaleString('en-US'));
+  const yP = panel(top, Hp, pLo, pHi, niceTicks(pLo, pHi, 5), t => pHi < 100 ? String(+t.toFixed(2)) : Math.round(t).toLocaleString('en-US'));
   let band = ''; const bi = idx.filter(i => ind.up[i] != null);
   if (bi.length) { band = 'M' + bi.map(i => x(i).toFixed(1) + ' ' + yP(ind.up[i]).toFixed(1)).join('L') + 'L' + bi.slice().reverse().map(i => x(i).toFixed(1) + ' ' + yP(ind.lo[i]).toFixed(1)).join('L') + 'Z';
     el('path', { d: band, fill: css('bandfill'), stroke: 'none' }, svg); }
@@ -477,6 +485,7 @@ function applyStored(key, d){
   const merged = Core.merge(rows, Core.parseCompact(mk.extra));
   if (merged[merged.length - 1].d < mk.rows[mk.rows.length - 1].d && rows.length < mk.rows.length) return false;
   mk.rows = merged; mk.source = d.source || mk.srcName; mk.updatedAt = d.updatedAt || ''; mk.stored = true;
+  if (mk.fq && typeof d.fq === 'string') { const f = Core.parseCompact(d.fq); if (f.length) mk.fq = f; }
   if (key === state.cur) renderAll(); return true;
 }
 
@@ -510,7 +519,7 @@ async function refresh(key, auto){
     // 1) 长历史：FRED / 东方财富
     let base = null, baseErr = null;
     try {
-      base = mk.parse(await fetchText(mcp, mk.url));
+      base = Core.dropJumps(mk.parse(await fetchText(mcp, mk.url)), mk.maxJump || 0.2);
       if (base.length < 300) { baseErr = { code: 'parse', message: `${mk.srcName}页面只读到 ${base.length} 行数据，可能页面没加载完或格式变了` }; base = null; }
     } catch (e) { if (FATAL.has(e && e.code)) throw e; baseErr = e; }
     // 2) 最近几天：EODHD（仅标普500，且已保存密钥）
@@ -527,7 +536,13 @@ async function refresh(key, auto){
       }
     }
     if (!base && !fresh.length) throw baseErr || { message: eodMsg };
-    const hist = base && mk.append ? Core.merge(mk.rows, base) : (base || mk.rows);
+    // append：新读到的这段（约 640 天）为准，更早的历史沿用已有数据
+    const hist = base && mk.append ? [...mk.rows.filter(r => r.d < base[0].d), ...base] : (base || mk.rows);
+    // 个股：顺便刷新前复权因子（除息后会变），读不到就沿用原来的
+    if (mk.fqUrl) {
+      try { const f = Core.parseSinaFq(await fetchText(mcp, mk.fqUrl)); if (f.length) mk.fq = f; }
+      catch (e) { if (FATAL.has(e && e.code)) throw e; }
+    }
     const rows = Core.merge(hist, fresh.length ? fresh : Core.parseCompact(mk.extra));
     mk.rows = rows;
     mk.source = base && fresh.length ? `${mk.srcName} + EODHD（已刷新）` : base ? `${mk.srcName}（已刷新）` : '已保存数据 + EODHD（已刷新）';
@@ -540,7 +555,7 @@ async function refresh(key, auto){
     note(`${mk.name}：${parts.join('；')}。`, !base || !!eodMsg);
     try { localStorage.setItem('last-try-' + key, String(Date.now())); } catch (e) {}
     if (mk.doc) {
-      try { await mk.doc.set({ rows: Core.toCompact(rows), updatedAt: mk.updatedAt, source: mk.source, last: newLast }); mk.stored = true; }
+      try { await mk.doc.set({ rows: Core.toCompact(rows), updatedAt: mk.updatedAt, source: mk.source, last: newLast, ...(mk.fq ? { fq: Core.toCompact(mk.fq) } : {}) }); mk.stored = true; }
       catch (e) { note(`${mk.name}：数据已刷新，但没能保存到页面存储，下次打开会重新读取。`); }
     }
   } catch (e) {
