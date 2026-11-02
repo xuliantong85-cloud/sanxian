@@ -132,8 +132,7 @@ td:first-child{font-family:var(--body)}
     <div class="panel-head">
       <h2 id="d-title">—</h2>
       <div class="seg" role="group" aria-label="时间范围">
-        <button type="button" data-r="0" aria-pressed="true">全部</button>
-        <button type="button" data-r="1260" aria-pressed="false">5 年</button>
+        <button type="button" data-r="0" aria-pressed="true">5 年</button>
         <button type="button" data-r="756" aria-pressed="false">3 年</button>
         <button type="button" data-r="252" aria-pressed="false">1 年</button>
       </div>
@@ -166,7 +165,7 @@ td:first-child{font-family:var(--body)}
       <div>
         <h3 style="margin-bottom:6px">各项指标与历史分位</h3>
         <div style="overflow-x:auto"><table><thead><tr><th>指标</th><th>当前</th><th>历史分位</th><th>20% 分位</th><th>中位</th><th>80% 分位</th></tr></thead><tbody id="t-ind"></tbody></table></div>
-        <p class="note" style="margin-top:6px">分位：2018 年以来有多少比例的交易日低于当前值。股息率和息差越高越便宜，其他越低越便宜。</p>
+        <p class="note" style="margin-top:6px">分位：近 5 年有多少比例的交易日低于当前值。股息率和息差越高越便宜，其他越低越便宜。</p>
       </div>
       <div>
         <h3 style="margin-bottom:6px">近年分红（每股税前）</h3>
@@ -183,13 +182,13 @@ td:first-child{font-family:var(--body)}
       <div><h3>股息率 − 国债收益率（息差）</h3><p>分红股常被拿来和国债比。息差越大，相对"无风险收益"越划算。利率下行时，分红股整体会变贵，这一项能纠正只和自身历史比的偏差。</p></div>
       <div><h3>市盈率 / 市净率</h3><p>市盈率看盈利，适合盈利稳定的公司（长江电力、美的）。银行更看市净率，因为利润受拨备影响大。财报季市盈率会跳一下，属正常。</p></div>
       <div><h3>参考价</h3><p>把三项估值放回历史 20% / 50% / 80% 分位换算成股价。适合分批：靠近偏低参考价分批买，靠近偏高参考价考虑分批卖，而不是一次性。</p></div>
-      <div><h3>局限</h3><p>历史只有 2018 年以来约 9 年；公司基本面变化（盈利下滑、分红减少）会让"便宜"变成陷阱；银行整体估值中枢多年下移。本页不构成投资建议。</p></div>
+      <div><h3>局限</h3><p>只和近 5 年比，如果这 5 年整体偏贵或偏便宜，判断也会跟着偏；公司基本面变化（盈利下滑、分红减少）会让"便宜"变成陷阱；银行整体估值中枢多年下移。本页不构成投资建议。</p></div>
     </div>
   </section>
 
   <footer class="foot">
     <p><b>数据</b>　每日估值（收盘价、市盈率 TTM、市净率 MRQ）、分红记录和中国 10 年期国债收益率来自东方财富数据中心，每个交易日自动更新。收盘价已与腾讯行情逐日核对，分红金额已与新浪复权因子核对。</p>
-    <p><b>方法</b>　股息率 = 每股年度分红 ÷ 收盘价；每股年度分红 = 最近一次年度末期分红 + 最近一次中期分红（各自 15 个月内派发的才算，税前）。不用"过去 365 天"滚动求和，因为除息日每年会前后挪动，会让股息率忽高忽低。分位以 2018 年以来每只股票自己的全部交易日为基准。估值温度 = 平均（市盈率分位，市净率分位，1 − 股息率分位）× 100。</p>
+    <p><b>方法</b>　股息率 = 每股年度分红 ÷ 收盘价；每股年度分红 = 最近一次年度末期分红 + 最近一次中期分红（各自 15 个月内派发的才算，税前）。不用"过去 365 天"滚动求和，因为除息日每年会前后挪动，会让股息率忽高忽低。分位以每只股票自己近 5 年的交易日为基准（数据从 2018 年起保存，可以改基准期）。估值温度 = 平均（市盈率分位，市净率分位，1 − 股息率分位）× 100。</p>
   </footer>
 </div>
 
@@ -204,7 +203,10 @@ const f = (x, n = 2) => x == null || !isFinite(x) ? '—' : x.toFixed(n);
 const pc = x => x == null ? '—' : Math.round(x * 100) + '%';
 const fp = (x, n = 2) => x == null ? '—' : (x > 0 ? '+' : '') + x.toFixed(n) + '%';
 
-const S = DATA.stocks.map(s => ({ ...s, a: Value.analyze(Value.series(s.val, s.div, DATA.bond)), divs: Value.parse(s.div) }));
+// 历史基准期：只和最近 BASE_YEARS 年比（2018–2021 年银行等板块估值明显更高，会把"历史中位"抬高）
+const BASE_YEARS = 5;
+const lastYears = rows => { const end = rows[rows.length - 1].d, from = (+end.slice(0, 4) - BASE_YEARS) + end.slice(4); return rows.filter(r => r.d > from); };
+const S = DATA.stocks.map(s => ({ ...s, a: Value.analyze(lastYears(Value.series(s.val, s.div, DATA.bond))), divs: Value.parse(s.div) }));
 const state = { cur: S[0].code, range: 0 };
 $('asof').textContent = `数据截至 ${S.map(s => s.a.cur.d).sort().pop()}，更新于 ${DATA.saved}`;
 
@@ -240,7 +242,7 @@ function renderCards() {
 function summaryText(s) {
   const a = s.a, c = a.cur, out = [];
   const dyVsMid = c.dy >= a.qs.dy.q50 ? '高于' : '低于';
-  out.push(`估值温度 ${f(a.temp, 0)}（${a.zone.label}）。市盈率 ${f(c.pe, 1)}、市净率 ${f(c.pb)}，分别处在 2018 年以来 ${pc(a.pct.pe)}、${pc(a.pct.pb)} 的位置；股息率 ${f(c.dy)}%，${dyVsMid}历史中位的 ${f(a.qs.dy.q50)}%。`);
+  out.push(`估值温度 ${f(a.temp, 0)}（${a.zone.label}）。市盈率 ${f(c.pe, 1)}、市净率 ${f(c.pb)}，分别处在近 ${BASE_YEARS} 年 ${pc(a.pct.pe)}、${pc(a.pct.pb)} 的位置；股息率 ${f(c.dy)}%，${dyVsMid}历史中位的 ${f(a.qs.dy.q50)}%。`);
   if (a.pct.spread != null) {
     const sp = a.pct.spread;
     const rel = sp >= 0.7 ? '相对国债的吸引力处在历史较高水平' : sp <= 0.3 ? '相对国债的吸引力处在历史较低水平' : '相对国债的吸引力处在历史中等水平';
