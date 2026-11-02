@@ -176,7 +176,11 @@ if __name__ == '__main__':
             update_append('snap_spdb.txt', '浦发银行', [('腾讯', from_tencent_raw, 'sh600000'), ('新浪', from_sina_raw, 'sh600000')], 'CN')]
     print(update_fq('fq_spdb.txt', 'sh600000', '浦发银行'))
     print('\n'.join(msgs))
+    # 估值看板：每日估值、分红、国债收益率（东方财富数据中心），只要 A 股已收盘的日子
+    import value_data
+    a_share_closed = lambda d: bool(closed_only({d: 0}, 'CN'))
+    print('\n'.join(value_data.update_all(a_share_closed)))
     import build
     build.main()
     if all('沿用原数据' in m or '跳过' in m for m in msgs):
-        sys.exit('三个数据源都没有更新成功')
+        sys.exit('行情数据源都没有更新成功')

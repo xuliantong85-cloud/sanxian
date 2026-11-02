@@ -34,9 +34,31 @@ def main():
     p = (p.replace("'内置快照（FRED + 补充报价）'", "'每日自动更新（FRED / EODHD）'")
           .replace("'内置快照（东方财富）'", "'每日自动更新（腾讯行情 / 东方财富）'")
           .replace("'内置快照（腾讯行情）'", "'每日自动更新（腾讯行情）'"))
+    # 公开版在市场切换栏后面加一个去估值看板的链接
+    p = p.replace('  </nav>\n', '  </nav>\n  <a href="value.html" style="align-self:flex-end;font-size:13px;margin-top:-12px">分红股估值看板 →</a>\n', 1)
     (D / 'public').mkdir(exist_ok=True)
     (D / 'public' / 'index.html').write_text(p, encoding='utf8')
-    print('index.html 和 public/index.html 已生成')
+    build_value(today)
+    print('index.html、public/index.html 和 public/value.html 已生成')
+
+
+def build_value(today):
+    """估值看板：value_page.html + valuecore.js + stocks.json 里每只股票的估值/分红 + 国债收益率"""
+    import json
+    rd = lambda n: (D / n).read_text().strip() if (D / n).exists() else ''
+    stocks = [{**s, 'val': rd(f'val_{s["code"]}.txt'), 'div': rd(f'div_{s["code"]}.txt')}
+              for s in json.loads((D / 'stocks.json').read_text(encoding='utf8'))]
+    stocks = [s for s in stocks if s['val']]
+    data = json.dumps({'saved': today, 'bond': rd('bond10y.txt'), 'stocks': stocks}, ensure_ascii=False)
+    v = (D / 'value_page.html').read_text(encoding='utf8')
+    v = v.replace('/*__VALUECORE__*/', (D / 'valuecore.js').read_text(encoding='utf8')).replace('__VALUE_DATA__', script_safe(data))
+    assert '__VALUE_DATA__' not in v and '/*__VALUECORE__*/' not in v
+    (D / 'public' / 'value.html').write_text(v, encoding='utf8')
+
+
+def script_safe(s):
+    # 数据嵌进 <script>，防止数据里出现 </script>
+    return s.replace('</', '<\\/')
 
 
 if __name__ == '__main__':
