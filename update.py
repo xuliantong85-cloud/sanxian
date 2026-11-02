@@ -6,7 +6,8 @@
 #   标普500：FRED 不允许脚本访问，改用 EODHD
 #            需要环境变量 EODHD_KEY；没有密钥时跳过标普，只更新另外两个
 import json, os, re, sys, urllib.request
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 D = Path(__file__).parent
@@ -14,6 +15,19 @@ EASTMONEY = ('https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={}'
              '&fields1=f1,f2,f3&fields2=f51,f53&klt=101&fqt=0&end=20500101&lmt=60')
 TENCENT = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={},day,,,60,qfq'
 TENCENT_RAW = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={},day,,,60,'
+
+
+# 各市场收盘后多久才认这一天的数据（数据源在盘中也会返回当天的行，那是盘中价不是收盘价）
+CLOSE = {'US': ('America/New_York', 17, 0), 'CN': ('Asia/Shanghai', 15, 30), 'HK': ('Asia/Hong_Kong', 16, 40)}
+
+
+def closed_only(rows, market):
+    """去掉还没收盘的交易日"""
+    tz, h, m = CLOSE[market]
+    now = datetime.now(ZoneInfo(tz))
+    today = now.date().isoformat()
+    after_close = (now.hour, now.minute) >= (h, m)
+    return {d: c for d, c in rows.items() if d < today or (d == today and after_close)}
 
 
 def get(url):
@@ -89,19 +103,19 @@ def from_eodhd(symbol):
     return {r['date']: float(r['close']) for r in data if r.get('close')}
 
 
-def update_cn(name, tencent, secid, label):
+def update_cn(name, tencent, secid, label, market):
     """沪深300、恒生科技：腾讯为主，东方财富备用"""
-    return update_append(name, label, [('腾讯', from_tencent, tencent), ('东方财富', from_eastmoney, secid)])
+    return update_append(name, label, [('腾讯', from_tencent, tencent), ('东方财富', from_eastmoney, secid)], market)
 
 
-def update_append(name, label, sources, max_jump=0.2):
-    """依次尝试各数据源，在已有历史后面补上新交易日"""
+def update_append(name, label, sources, market, max_jump=0.2):
+    """依次尝试各数据源，在已有历史后面补上新交易日（只要已收盘的）"""
     old = load(name)
     last = max(old)
     errs = []
     for src, fn, arg in sources:
         try:
-            fresh = fn(arg)
+            fresh = closed_only(fn(arg), market)
         except Exception as e:
             # 只记录异常类型和自定义说明，不打印原文，避免带密钥的网址进日志
             errs.append(f'{src} {e}' if isinstance(e, RuntimeError) else f'{src} {type(e).__name__}')
@@ -123,7 +137,7 @@ def update_append(name, label, sources, max_jump=0.2):
             errs.append(f'{src} {jump} 价格异常（{added[jump]}）')
             continue
         if not added:
-            return f'{label}：没有新交易日（最新 {last}，来自{src}）'
+            return f'{label}：没有新的已收盘交易日（最新 {last}，来自{src}）'
         old.update(added)
         save(name, old)
         return f'{label}：{last} → {max(old)}（来自{src}）'
@@ -144,10 +158,10 @@ def update_spx():
         return f'标普500：EODHD 读取失败（{type(e).__name__}），沿用原数据'
     if not isinstance(data, list) or not data:
         return '标普500：EODHD 没有返回数据（可能是密钥无效或额度用完），沿用原数据'
-    fresh = {r['date']: float(r['close']) for r in data if r.get('close')}
+    fresh = closed_only({r['date']: float(r['close']) for r in data if r.get('close')}, 'US')
     added = {d: c for d, c in fresh.items() if d > last}
     if not added:
-        return f'标普500：没有新交易日（EODHD 读到 {len(fresh)} 天，最新 {max(fresh)}）'
+        return f'标普500：没有新交易日（EODHD 读到 {len(fresh)} 个已收盘交易日，最新 {max(fresh) if fresh else "—"}）'
     old.update(added)
     save('snap.txt', old)
     return f'标普500：{last} → {max(old)}'
@@ -155,11 +169,11 @@ def update_spx():
 
 if __name__ == '__main__':
     msgs = [update_spx(),
-            update_append('snap_ndx.txt', '纳指100', [('腾讯', from_tencent, 'us.NDX'), ('EODHD', from_eodhd, 'NDX.INDX')]),
-            update_cn('snap_csi300.txt', 'sh000300', '1.000300', '沪深300'),
-            update_cn('snap_hstech.txt', 'hkHSTECH', '124.HSTECH', '恒生科技'),
+            update_append('snap_ndx.txt', '纳指100', [('腾讯', from_tencent, 'us.NDX'), ('EODHD', from_eodhd, 'NDX.INDX')], 'US'),
+            update_cn('snap_csi300.txt', 'sh000300', '1.000300', '沪深300', 'CN'),
+            update_cn('snap_hstech.txt', 'hkHSTECH', '124.HSTECH', '恒生科技', 'HK'),
             # 个股用不复权价，送股除权日可能大跌，放宽到 50%
-            update_append('snap_spdb.txt', '浦发银行', [('腾讯', from_tencent_raw, 'sh600000'), ('新浪', from_sina_raw, 'sh600000')], max_jump=0.5)]
+            update_append('snap_spdb.txt', '浦发银行', [('腾讯', from_tencent_raw, 'sh600000'), ('新浪', from_sina_raw, 'sh600000')], 'CN', max_jump=0.5)]
     print(update_fq('fq_spdb.txt', 'sh600000', '浦发银行'))
     print('\n'.join(msgs))
     import build
