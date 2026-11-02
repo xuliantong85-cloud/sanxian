@@ -308,7 +308,7 @@ const MKT = {
     rows: Core.parseCompact(SNAP_HST), source: '内置快照（东方财富）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
   // 个股：rows 存不复权收盘价，计算前用 fq（前复权因子）按比例换算；分红除息后刷新因子即可
   spdb: { key: 'spdb', name: '浦发银行', full: '浦发银行（600000.SH）股价，前复权', eyebrow: 'SPDB · 600000.SH · 日线 · 前复权', srcName: '腾讯行情', host: 'web.ifzq.gtimg.cn',
-    url: 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600000,day,,,640,', parse: Core.parseTencent, extra: '', append: true, maxJump: 0.5,
+    url: 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600000,day,,,640,', parse: Core.parseTencent, extra: '', append: true,
     fqUrl: 'https://finance.sina.com.cn/realstock/company/sh600000/qfq.js', fq: Core.parseCompact(SNAP_SPDB_FQ),
     rows: Core.parseCompact(SNAP_SPDB), source: '内置快照（腾讯行情）', updatedAt: SNAP_SAVED, doc: null, aiText: '' },
 };
@@ -519,7 +519,7 @@ async function refresh(key, auto){
     // 1) 长历史：FRED / 东方财富
     let base = null, baseErr = null;
     try {
-      base = Core.dropJumps(mk.parse(await fetchText(mcp, mk.url)), mk.maxJump || 0.2);
+      base = Core.dropJumps(mk.parse(await fetchText(mcp, mk.url)), mk.maxJump || 0.5);
       if (base.length < 300) { baseErr = { code: 'parse', message: `${mk.srcName}页面只读到 ${base.length} 行数据，可能页面没加载完或格式变了` }; base = null; }
     } catch (e) { if (FATAL.has(e && e.code)) throw e; baseErr = e; }
     // 2) 最近几天：EODHD（仅标普500，且已保存密钥）

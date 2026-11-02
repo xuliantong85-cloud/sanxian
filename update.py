@@ -108,7 +108,7 @@ def update_cn(name, tencent, secid, label, market):
     return update_append(name, label, [('腾讯', from_tencent, tencent), ('东方财富', from_eastmoney, secid)], market)
 
 
-def update_append(name, label, sources, market, max_jump=0.2):
+def update_append(name, label, sources, market, max_jump=0.5):
     """依次尝试各数据源，在已有历史后面补上新交易日（只要已收盘的）"""
     old = load(name)
     last = max(old)
@@ -126,7 +126,8 @@ def update_append(name, label, sources, market, max_jump=0.2):
             errs.append(f'{src} 数据与已有历史对不上')
             continue
         added = {d: c for d, c in fresh.items() if d > last}
-        # 新数据的单日涨跌超过上限，多半是数据源串了代码（例如腾讯 us.NDX 的当日行情曾是另一只股票）
+        # 新数据单日涨跌超过 50%，多半是数据源串了代码（例如腾讯 us.NDX 的当日行情曾是另一只股票）
+        # 不设得更低：恒生科技 2022-03-16 真实上涨过 22%
         prev, jump = old[last], None
         for d in sorted(added):
             if abs(added[d] / prev - 1) > max_jump:
@@ -172,8 +173,7 @@ if __name__ == '__main__':
             update_append('snap_ndx.txt', '纳指100', [('腾讯', from_tencent, 'us.NDX'), ('EODHD', from_eodhd, 'NDX.INDX')], 'US'),
             update_cn('snap_csi300.txt', 'sh000300', '1.000300', '沪深300', 'CN'),
             update_cn('snap_hstech.txt', 'hkHSTECH', '124.HSTECH', '恒生科技', 'HK'),
-            # 个股用不复权价，送股除权日可能大跌，放宽到 50%
-            update_append('snap_spdb.txt', '浦发银行', [('腾讯', from_tencent_raw, 'sh600000'), ('新浪', from_sina_raw, 'sh600000')], 'CN', max_jump=0.5)]
+            update_append('snap_spdb.txt', '浦发银行', [('腾讯', from_tencent_raw, 'sh600000'), ('新浪', from_sina_raw, 'sh600000')], 'CN')]
     print(update_fq('fq_spdb.txt', 'sh600000', '浦发银行'))
     print('\n'.join(msgs))
     import build
