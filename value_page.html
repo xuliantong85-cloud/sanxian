@@ -53,7 +53,7 @@ a{color:var(--accent)}
 .top .side{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:13px;color:var(--muted)}
 
 /* 总览卡片 */
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
 .card{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;
   text-align:left;color:inherit;min-width:0;transition:border-color .15s}
 .card:hover{border-color:var(--accent)}
@@ -225,7 +225,7 @@ function renderCards() {
     const i = el('i'); i.style.left = a.temp + '%'; m.append(i);
     const ml = el('div', 'meter-l'); ['偏低', '合理', '偏高'].forEach(x => ml.append(el('span', '', x)));
     const kv = el('dl', 'kv');
-    [['股息率', f(c.dy) + '%', `${pc(a.pct.dy)} 分位`], ['息差（对国债）', f(c.spread) + ' 个百分点', `${pc(a.pct.spread)} 分位`],
+    [['股息率', f(c.dy) + '%', `${pc(a.pct.dy)} 分位`], ['对国债息差', c.spread == null ? '—' : (c.spread >= 0 ? '+' : '') + f(c.spread), `${pc(a.pct.spread)} 分位`],
      ['市盈率 TTM', f(c.pe, 1), `${pc(a.pct.pe)} 分位`], ['市净率', f(c.pb), `${pc(a.pct.pb)} 分位`]]
       .forEach(([k, v, p]) => { kv.append(el('dt', '', k), el('dd', '', v), el('dd', 'p', p)); });
     const rb = el('div', 'refbar');
