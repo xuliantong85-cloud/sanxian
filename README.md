@@ -8,6 +8,7 @@
 | --- | --- |
 | `index.html` | claude.ai 版网页（可刷新数据、保存 EODHD 密钥、Claude 解读） |
 | `public/index.html` | 公开版网页，发布在 GitHub Pages，只显示每天自动更新的数据 |
+| `world-cities.html` | 世界城市时差与直线距离计算器（自动复制到 `public/world-cities.html` 发布） |
 | `page.html` | 网页模板（界面、图表、刷新与存储逻辑） |
 | `core.js` | 指标计算与后市分析逻辑，不依赖浏览器，可用 Node.js 单独测试 |
 | `snap.txt` | 标普500 数据快照（FRED 历史 + EODHD 补充，2016-10 起） |
@@ -23,6 +24,10 @@
 | `.github/workflows/daily.yml` | GitHub 定时任务：每个交易日运行 `update.py` 并发布到 GitHub Pages |
 
 快照格式：`yymmdd:收盘价`，用英文逗号分隔。
+
+## 世界城市时差与距离工具（public/world-cities.html）
+
+选择两座主要城市，按指定时刻计算当地时间、UTC 时差和城市中心之间的 Haversine 大圆距离。时区由浏览器 Intl API 提供，自动适配夏令时和非整小时偏移；无需额外 API 或密钥。
 
 ## 分红股估值看板（public/value.html）
 

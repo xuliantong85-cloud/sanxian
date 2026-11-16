@@ -1,7 +1,6 @@
-# 由模板 page.html、计算逻辑 core.js 和三份数据快照生成两份网页：
-#   index.html         claude.ai 版（可刷新数据、保存密钥、Claude 解读）
-#   public/index.html  公开版（放在 GitHub Pages，只显示每天更新的快照数据）
+# 由模板 page.html、计算逻辑 core.js 和数据快照生成网页
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,12 +33,15 @@ def main():
     p = (p.replace("'内置快照（FRED + 补充报价）'", "'每日自动更新（FRED / EODHD）'")
           .replace("'内置快照（东方财富）'", "'每日自动更新（腾讯行情 / 东方财富）'")
           .replace("'内置快照（腾讯行情）'", "'每日自动更新（腾讯行情）'"))
-    # 公开版在市场切换栏后面加一个去估值看板的链接
-    p = p.replace('  </nav>\n', '  </nav>\n  <a href="value.html" style="align-self:flex-end;font-size:13px;margin-top:-12px">分红股估值看板 →</a>\n', 1)
+    # 公开版导航入口
+    links = ('  <a href="value.html" style="align-self:flex-end;font-size:13px;margin-top:-12px">分红股估值看板 →</a>\n'
+             '  <a href="world-cities.html" style="align-self:flex-end;font-size:13px;margin-top:-12px">世界城市时差与距离 →</a>\n')
+    p = p.replace('  </nav>\n', '  </nav>\n' + links, 1)
     (D / 'public').mkdir(exist_ok=True)
     (D / 'public' / 'index.html').write_text(p, encoding='utf8')
+    shutil.copyfile(D / 'world-cities.html', D / 'public' / 'world-cities.html')
     build_value(today)
-    print('index.html、public/index.html 和 public/value.html 已生成')
+    print('index.html、public/index.html、public/value.html 和 public/world-cities.html 已生成')
 
 
 def build_value(today):
@@ -57,7 +59,6 @@ def build_value(today):
 
 
 def script_safe(s):
-    # 数据嵌进 <script>，防止数据里出现 </script>
     return s.replace('</', '<\\/')
 
 

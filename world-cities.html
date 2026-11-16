@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f3f5f7">
+<title>世界城市时差与距离计算器</title>
+<style>
+:root{--bg:#f2f4f6;--card:#fff;--ink:#17212b;--muted:#667382;--line:#dce2e8;--accent:#24499c;--soft:#edf2fc;--green:#18764b;--shadow:0 12px 35px rgba(20,35,55,.07)}
+*{box-sizing:border-box}body{margin:0;padding:28px 16px 48px;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif}
+.wrap{max-width:900px;margin:auto;display:grid;gap:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{font-size:12px;letter-spacing:.13em;color:var(--muted);font-weight:700}.top a{color:var(--accent);text-decoration:none;font-size:13px}
+h1{font-size:clamp(26px,5vw,36px);line-height:1.2;margin:6px 0 4px;letter-spacing:-.03em}.sub{color:var(--muted);margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow)}
+.controls{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end}.field label{display:block;font-size:13px;color:var(--muted);font-weight:700;margin-bottom:7px}
+select,input{width:100%;height:48px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);padding:0 12px;font:inherit}
+.swap{width:42px;height:42px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--accent);font-size:20px;cursor:pointer;margin-bottom:3px}
+.timebar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:18px}.timebar .field{flex:1;min-width:230px}.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}button.primary{background:var(--accent);color:#fff;border:0;border-radius:11px;padding:12px 20px;font:inherit;font-weight:700;cursor:pointer}button.secondary{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:11px;padding:11px 16px;font:inherit;cursor:pointer}
+.results{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metric{background:var(--soft);border-radius:14px;padding:18px}.metric .label{font-size:13px;color:var(--muted);font-weight:700}.metric .value{font-size:clamp(25px,5vw,34px);font-weight:800;letter-spacing:-.03em;margin:4px 0}.metric .detail{font-size:13px;color:var(--muted)}
+.citytimes{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-top:16px}.citytime{border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}.citytime .city{font-weight:800;font-size:17px}.citytime .clock{font-size:clamp(22px,4vw,29px);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;margin:5px 0}.citytime .date{color:var(--muted);font-size:13px}.arrow{font-size:22px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);line-height:1.7}.foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+@media(max-width:620px){body{padding:20px 12px 32px}.card{padding:17px}.controls{grid-template-columns:1fr 38px 1fr;gap:7px}.swap{width:36px;height:36px}.results{grid-template-columns:1fr}.citytimes{grid-template-columns:1fr}.arrow{transform:rotate(90deg);text-align:center}.citytime{padding:13px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header>
+ <div class="top"><span class="eyebrow">WORLD CITY TOOL / 01</span><a href="./#spx">← 返回市场分析工具</a></div>
+ <h1>世界城市时差与距离</h1>
+ <p class="sub">选择两座城市，即时比较当地时间、UTC 时差与地理直线距离。</p>
+</header>
+<section class="card">
+ <div class="controls">
+  <div class="field"><label for="cityA">城市 A</label><select id="cityA"></select></div>
+  <button class="swap" id="swap" type="button" title="交换城市" aria-label="交换城市">⇄</button>
+  <div class="field"><label for="cityB">城市 B</label><select id="cityB"></select></div>
+ </div>
+ <div class="timebar">
+  <div class="field"><label for="moment">比较时刻</label><input id="moment" type="datetime-local"><div class="hint">按你当前设备的本地时区输入；默认使用现在。</div></div>
+ </div>
+ <div class="actions"><button class="primary" id="calculate" type="button">计算时差与距离</button><button class="secondary" id="now" type="button">回到当前时刻</button></div>
+</section>
+<section class="card" aria-live="polite">
+ <div class="results">
+  <div class="metric"><div class="label">两地时差</div><div class="value" id="difference">—</div><div class="detail" id="offsets">—</div></div>
+  <div class="metric"><div class="label">地球表面直线距离</div><div class="value" id="distance">—</div><div class="detail">按城市中心坐标计算的大圆距离</div></div>
+ </div>
+ <div class="citytimes">
+  <div class="citytime"><div class="city" id="nameA">城市 A</div><div class="clock" id="timeA">—</div><div class="date" id="dateA">—</div></div>
+  <div class="arrow">⇄</div>
+  <div class="citytime"><div class="city" id="nameB">城市 B</div><div class="clock" id="timeB">—</div><div class="date" id="dateB">—</div></div>
+ </div>
+</section>
+<section class="card">
+ <div class="eyebrow">计算说明</div>
+ <p class="note" style="margin-top:8px">时差根据所选时刻对应的 IANA 时区规则计算，会自动考虑夏令时及半小时、45 分钟等非整小时偏移。距离使用两座城市中心点的经纬度，通过 Haversine 大圆公式估算；这是地表最短距离，不是航线或实际交通距离。</p>
+</section>
+<footer class="foot"><span>独立小工具 · 无需登录 · 不收集数据</span><span>时区数据由浏览器 Intl API 提供</span></footer>
+</main>
+<script>
+const CITIES = [
+{name:"纽约",country:"美国",tz:"America/New_York",lat:40.7128,lon:-74.0060},
+{name:"洛杉矶",country:"美国",tz:"America/Los_Angeles",lat:34.0522,lon:-118.2437},
+{name:"芝加哥",country:"美国",tz:"America/Chicago",lat:41.8781,lon:-87.6298},
+{name:"多伦多",country:"加拿大",tz:"America/Toronto",lat:43.6532,lon:-79.3832},
+{name:"墨西哥城",country:"墨西哥",tz:"America/Mexico_City",lat:19.4326,lon:-99.1332},
+{name:"圣保罗",country:"巴西",tz:"America/Sao_Paulo",lat:-23.5505,lon:-46.6333},
+{name:"伦敦",country:"英国",tz:"Europe/London",lat:51.5072,lon:-0.1276},
+{name:"巴黎",country:"法国",tz:"Europe/Paris",lat:48.8566,lon:2.3522},
+{name:"法兰克福",country:"德国",tz:"Europe/Berlin",lat:50.1109,lon:8.6821},
+{name:"苏黎世",country:"瑞士",tz:"Europe/Zurich",lat:47.3769,lon:8.5417},
+{name:"莫斯科",country:"俄罗斯",tz:"Europe/Moscow",lat:55.7558,lon:37.6173},
+{name:"伊斯坦布尔",country:"土耳其",tz:"Europe/Istanbul",lat:41.0082,lon:28.9784},
+{name:"迪拜",country:"阿联酋",tz:"Asia/Dubai",lat:25.2048,lon:55.2708},
+{name:"孟买",country:"印度",tz:"Asia/Kolkata",lat:19.0760,lon:72.8777},
+{name:"新加坡",country:"新加坡",tz:"Asia/Singapore",lat:1.3521,lon:103.8198},
+{name:"香港",country:"中国",tz:"Asia/Hong_Kong",lat:22.3193,lon:114.1694},
+{name:"上海",country:"中国",tz:"Asia/Shanghai",lat:31.2304,lon:121.4737},
+{name:"北京",country:"中国",tz:"Asia/Shanghai",lat:39.9042,lon:116.4074},
+{name:"东京",country:"日本",tz:"Asia/Tokyo",lat:35.6762,lon:139.6503},
+{name:"首尔",country:"韩国",tz:"Asia/Seoul",lat:37.5665,lon:126.9780},
+{name:"曼谷",country:"泰国",tz:"Asia/Bangkok",lat:13.7563,lon:100.5018},
+{name:"悉尼",country:"澳大利亚",tz:"Australia/Sydney",lat:-33.8688,lon:151.2093},
+{name:"墨尔本",country:"澳大利亚",tz:"Australia/Melbourne",lat:-37.8136,lon:144.9631},
+{name:"奥克兰",country:"新西兰",tz:"Pacific/Auckland",lat:-36.8509,lon:174.7645},
+{name:"约翰内斯堡",country:"南非",tz:"Africa/Johannesburg",lat:-26.2041,lon:28.0473},
+{name:"开罗",country:"埃及",tz:"Africa/Cairo",lat:30.0444,lon:31.2357}
+];
+const $ = id => document.getElementById(id);
+const selectA=$("cityA"), selectB=$("cityB");
+function fillCities(){
+ CITIES.forEach((c,i)=>{const label=c.name+" · "+c.country;selectA.add(new Option(label,i));selectB.add(new Option(label,i));});
+ selectA.value="16";selectB.value="0";
+}
+function pad(n){return String(n).padStart(2,"0")}
+function setNow(){const d=new Date();$("moment").value=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());calculate()}
+function partsAt(date,tz){
+ const parts=new Intl.DateTimeFormat("en-GB",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(date);
+ const o={};parts.forEach(p=>{if(p.type!=="literal")o[p.type]=Number(p.value)});return o;
+}
+function offsetAt(date,tz){
+ const p=partsAt(date,tz);
+ return Math.round((Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute,p.second)-date.getTime())/60000);
+}
+function offsetText(m){
+ const sign=m>=0?"+":"−";m=Math.abs(m);return "UTC"+sign+pad(Math.floor(m/60))+":"+pad(m%60);
+}
+function diffText(m){
+ if(m===0)return "两地时间相同";
+ const sign=m>0?1:-1,abs=Math.abs(m),h=Math.floor(abs/60),mins=abs%60;
+ const amount=(h? h+"小时":"")+(mins?mins+"分钟":"");
+ return "城市 B 比城市 A"+(sign>0?"快 ":"慢 ")+amount;
+}
+function distanceKm(a,b){
+ const rad=x=>x*Math.PI/180,R=6371;
+ const dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon);
+ const x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;
+ return 2*R*Math.asin(Math.sqrt(Math.min(1,x)));
+}
+function calculate(){
+ const a=CITIES[Number(selectA.value)],b=CITIES[Number(selectB.value)];
+ const raw=$("moment").value;
+ const date=raw?new Date(raw):new Date();
+ if(Number.isNaN(date.getTime()))return;
+ const oa=offsetAt(date,a.tz),ob=offsetAt(date,b.tz),delta=ob-oa;
+ $("difference").textContent=diffText(delta);
+ $("offsets").textContent=a.name+" "+offsetText(oa)+"  ·  "+b.name+" "+offsetText(ob);
+ const km=distanceKm(a,b);
+ $("distance").textContent=km>=1000?(km/1000).toFixed(2)+" 千公里":Math.round(km).toLocaleString("zh-CN")+" 公里";
+ $("nameA").textContent=a.name+" · "+a.country;$("nameB").textContent=b.name+" · "+b.country;
+ const opts={timeZone:"UTC",hour:"2-digit",minute:"2-digit",hourCycle:"h23"};
+ $("timeA").textContent=new Intl.DateTimeFormat("zh-CN",{...opts,timeZone:a.tz}).format(date);
+ $("timeB").textContent=new Intl.DateTimeFormat("zh-CN",{...opts,timeZone:b.tz}).format(date);
+ const dateOpts={timeZone:"UTC",year:"numeric",month:"long",day:"numeric",weekday:"short"};
+ $("dateA").textContent=new Intl.DateTimeFormat("zh-CN",{...dateOpts,timeZone:a.tz}).format(date)+" · "+offsetText(oa);
+ $("dateB").textContent=new Intl.DateTimeFormat("zh-CN",{...dateOpts,timeZone:b.tz}).format(date)+" · "+offsetText(ob);
+}
+$("calculate").addEventListener("click",calculate);
+$("now").addEventListener("click",setNow);
+$("swap").addEventListener("click",()=>{const v=selectA.value;selectA.value=selectB.value;selectB.value=v;calculate()});
+selectA.addEventListener("change",calculate);selectB.addEventListener("change",calculate);$("moment").addEventListener("change",calculate);
+fillCities();setNow();setInterval(()=>{if(!$("moment").matches(":focus"))setNow()},60000);
+</script>
+</body>
+</html>
